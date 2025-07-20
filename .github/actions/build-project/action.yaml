@@ -1,0 +1,25 @@
+name: 'Build nx project'
+description: 'This action builds the specified Nx project.'
+
+inputs:
+  project:
+    description: 'Project to build.'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Build Project (1st attempt)
+      id: first_attempt
+      shell: bash
+      run: |
+        echo "Building project: ${{ inputs.project }}"
+        npx nx build --verbose ${{ inputs.project }}
+      continue-on-error: true
+
+    - name: Rerun Build Project if failed (2nd attempt)
+      if: failure()
+      shell: bash
+      run: |
+        echo "First attempt failed. Retrying build for project: ${{ inputs.project }}"
+        npx nx build --verbose ${{ inputs.project }}

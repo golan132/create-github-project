@@ -1,0 +1,108 @@
+name: Terraform Workflow
+
+on:
+  push:
+    branches:
+      - 'dev'
+    paths:
+      - 'apps/portal/infrastructure/*-terraform/**'
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      aws_account_id:
+        description: 'AWS Account ID'
+        required: true
+        type: string
+      aws_iac_account_id:
+        description: 'AWS IaC Account ID'
+        required: true
+        type: string
+      aws_terraform_bucket:
+        description: 'S3 bucket for Terraform backend'
+        required: true
+        type: string
+      terraform_environment:
+        description: 'Terraform environment name (e.g. dev, prod)'
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  terraform:
+    runs-on:
+      - codebuild-gh-runner-infrastructure-${{ github.run_id }}-${{ github.run_attempt }}
+      - image:ubuntu-7.0
+      - instance-size:medium
+    environment:
+      name: ${{ github.ref == 'refs/heads/main' && 'Production' || 'Development' }}
+    env:
+      AWS_ACCOUNT: ${{ inputs.aws_account_id || vars.AWS_ACCOUNT_ID }}
+      AWS_IAC_ACCOUNT: ${{ inputs.aws_iac_account_id || vars.AWS_IAC_ACCOUNT_ID }}
+      AWS_TERRAFORM_BUCKET: ${{ inputs.aws_terraform_bucket || vars.AWS_TERRAFORM_BUCKET }}
+      TERRAFORM_ENVIRONMENT: ${{ inputs.terraform_environment || vars.TERRAFORM_ENVIRONMENT }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.2.0
+
+      - name: Assume Role Action
+        id: assume_role_action
+        uses: ./.github/actions/assume-role
+        with:
+          AWS_ACCOUNT: ${{ env.AWS_ACCOUNT }}
+          AWS_IAC_ACCOUNT: ${{ env.AWS_IAC_ACCOUNT }}
+          role_type: 'infrastructure'
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v1
+        with:
+          terraform_version: latest
+
+      - name: Identify the Terraform Directory
+        id: identify_terraform_directory
+        run: |
+          TF_WORKING_DIR=$(find ./apps/portal/infrastructure -type d -name "*-terraform" | head -n 1)
+
+          if [ -n "$TF_WORKING_DIR" ]; then
+            echo "Terraform working directory: $TF_WORKING_DIR"
+            echo "TF_WORKING_DIR=$TF_WORKING_DIR" >> $GITHUB_ENV
+          else
+            echo "No Terraform directory found."
+            exit 1
+          fi
+
+      - name: Check Terraform Formatting
+        run: |
+          terraform fmt -recursive -check
+
+          if [ $? -ne 0 ]; then
+            echo "Terraform files are not formatted correctly."
+            exit 1
+          else
+            echo "Terraform files are correctly formatted."
+          fi
+
+      - name: Terraform Init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform init -backend-config="bucket=$AWS_TERRAFORM_BUCKET"
+
+      - name: Terraform Validate
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform validate
+
+      - name: Terraform Init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform init -backend-config="bucket=$AWS_TERRAFORM_BUCKET"
+
+      - name: Terraform Plan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform plan -var-file="environments/$TERRAFORM_ENVIRONMENT/$TERRAFORM_ENVIRONMENT.tfvars"
+
+      - name: Terraform Apply
+        id: terraform_apply
+        uses: ./.github/actions/terraform-apply
+        with:
+          TF_WORKING_DIR: ${{ env.TF_WORKING_DIR }}
+          TERRAFORM_ENVIRONMENT: ${{ env.TERRAFORM_ENVIRONMENT }}

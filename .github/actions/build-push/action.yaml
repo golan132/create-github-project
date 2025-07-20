@@ -1,0 +1,75 @@
+name: 'Identify affected projects nx'
+description: 'This action identifies the affected project based on branch.'
+
+inputs:
+  branch:
+    description: 'The base branch.'
+    default: 'main'
+  project:
+    description: 'Project to deploy.'
+    required: true
+  ECR_REGISTRY:
+    description: 'ECR registry URL.'
+    required: true
+  IMAGE_TAG:
+    description: 'Image tag.'
+    default: 'latest'
+  ECS_CLUSTER:
+    description: 'Cluster name.'
+    default: 'portal'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+    - name: Fetch full git history
+      shell: bash
+      run: git fetch origin ${{ inputs.branch }} --depth=1
+
+    - name: Build, tag, and push image to Amazon ECR
+      id: build-publish
+      shell: bash
+      env:
+        ECR_REGISTRY: ${{ inputs.ECR_REGISTRY }}
+        ECR_REPOSITORY: ${{ inputs.project }}-ecr
+        IMAGE_TAG: ${{ inputs.IMAGE_TAG }}
+      run: |
+        echo "Building Docker image for project ${{ inputs.project }}"
+          
+        echo "Fetching project details using npx nx show project ${{ inputs.project }} --json"
+        PROJECT_DETAILS=$(npx nx show project "${{ inputs.project }}" --json)
+                    
+        RAW_PATH=$(echo "$PROJECT_DETAILS" | jq -r '.targets.build.outputs[0]')
+          
+        if [ "$RAW_PATH" == "null" ]; then
+          echo "First output path is null, trying to get outputPath"
+          RAW_PATH=$(echo "$PROJECT_DETAILS" | jq -r '.targets.build.options.outputPath')
+        fi
+                      
+        CLEANED_PATH=$(echo "$RAW_PATH" | sed 's|{workspaceRoot}/||g')
+          
+        # Normalize path for Docker (convert backslashes to forward slashes)
+        PROJECT_PATH=$(echo "$CLEANED_PATH" | sed 's|\\|/|g')
+          
+        echo "Debug: Cleaned project path: $PROJECT_PATH"
+          
+        echo "Building and tagging Docker image: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          
+        docker build -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" \
+          -t "$ECR_REGISTRY/$ECR_REPOSITORY:build-${{ github.run_id }}" \
+          -t "$ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }}" \
+          "$PROJECT_PATH"
+
+        docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+        docker push "$ECR_REGISTRY/$ECR_REPOSITORY:build-${{ github.run_id }}"
+        docker push "$ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }}"
+
+        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_ENV
+
+    - name: Force ECS Service Deployment
+      shell: bash
+      run: |
+        echo "Forcing new deployment of ECS service"
+        aws ecs update-service --cluster ${{ inputs.ECS_CLUSTER }}-cluster --service ${{ inputs.project }}-service --force-new-deployment

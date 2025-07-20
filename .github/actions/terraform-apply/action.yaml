@@ -1,0 +1,29 @@
+name: 'Terraform Apply'
+description: 'Sets up the Terraform workspace and applies configuration.'
+
+inputs:
+  TF_WORKING_DIR:
+    description: 'The working directory for Terraform.'
+    required: true
+  TERRAFORM_ENVIRONMENT:
+    description: 'The Terraform environment to use.'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Terraform Apply
+      shell: bash
+      working-directory: ${{ inputs.TF_WORKING_DIR }}
+      run: terraform apply -auto-approve -var-file="environments/${{ inputs.TERRAFORM_ENVIRONMENT }}/${{ inputs.TERRAFORM_ENVIRONMENT }}.tfvars"
+      continue-on-error: true
+
+    - name: Terraform Apply (2nd attempt if failed)
+      if: failure()
+      shell: bash
+      working-directory: ${{ inputs.TF_WORKING_DIR }}
+      run: |
+        echo "First attempt failed. Retrying Terraform apply for environment: ${{ inputs.TERRAFORM_ENVIRONMENT }}."
+        echo "This is expected if you manually modified the Secret Manager."
+        terraform apply -auto-approve -var-file="environments/${{ inputs.TERRAFORM_ENVIRONMENT }}/${{ inputs.TERRAFORM_ENVIRONMENT }}.tfvars"
+

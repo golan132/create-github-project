@@ -1,0 +1,42 @@
+name: 'Setup Nx'
+description: 'Sets up the workspace and installs dependencies.'
+
+inputs:
+  only-nx:
+    description: 'The type of install.'
+    default: 'true'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+
+    - name: Set NX_SOCKET_DIR
+      shell: bash
+      run: |
+        echo "NX_SOCKET_DIR=/tmp/nx-tmp" >> $GITHUB_ENV
+
+    - name: Install pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: latest
+        run_install: false
+
+    - name: Remove package-lock.json (if exists)
+      shell: bash
+      run: rm -f package-lock.json
+
+    - name: Install Nx only
+      if: ${{ inputs.only-nx == 'true' }}
+      shell: bash
+      run: pnpm install nx
+
+    - name: Install all dependencies
+      if: ${{ inputs.only-nx != 'true' }}
+      shell: bash
+      run: pnpm install
+
+    - name: Clear Nx Cache
+      shell: bash
+      run: npx nx reset
