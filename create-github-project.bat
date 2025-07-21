@@ -481,7 +481,7 @@ if exist "..\create-github-project\.github\workflows\release-please.yml" (
     echo DEBUG: release-please.yml NOT found at ..\create-github-project\.github\workflows\release-please.yml
 )
 
-:: Always copy release-please.yml for all project types
+:: Always copy release-please files for all project types
 if exist "..\create-github-project\.github\workflows\release-please.yml" (
     echo Copying release-please workflow from template...
     copy "..\create-github-project\.github\workflows\release-please.yml" ".github\workflows\" /Y >nul
@@ -492,6 +492,31 @@ if exist "..\create-github-project\.github\workflows\release-please.yml" (
     )
 ) else (
     echo ERROR: release-please.yml not found in template at ..\create-github-project\.github\workflows\
+)
+
+:: Copy release-please configuration files
+if exist "..\create-github-project\release-please-config.json" (
+    echo Copying release-please-config.json from template...
+    copy "..\create-github-project\release-please-config.json" "." /Y >nul
+    if !errorlevel! neq 0 (
+        echo ERROR: Failed to copy release-please-config.json from template.
+    ) else (
+        echo release-please-config.json copied successfully from template.
+    )
+) else (
+    echo WARNING: release-please-config.json not found in template at ..\create-github-project\
+)
+
+if exist "..\create-github-project\.release-please-manifest.json" (
+    echo Copying .release-please-manifest.json from template...
+    copy "..\create-github-project\.release-please-manifest.json" "." /Y >nul
+    if !errorlevel! neq 0 (
+        echo ERROR: Failed to copy .release-please-manifest.json from template.
+    ) else (
+        echo .release-please-manifest.json copied successfully from template.
+    )
+) else (
+    echo WARNING: .release-please-manifest.json not found in template at ..\create-github-project\
 )
 
 :: Copy NX-related workflows and actions for NX workspace and Full Stack projects
