@@ -1,0 +1,150 @@
+name: Deploy Nx Projects to ECS
+
+on:
+  push:
+    branches:
+      - 'dev'
+    paths:
+      - 'apps/portal/backend/**'
+      - 'apps/portal/frontend/**'
+      - 'libs/**'
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      branch:
+        description: 'Branch to deploy'
+        required: false
+        default: 'dev'
+        type: string
+      aws_account_id:
+        description: 'AWS Account ID'
+        required: false
+        type: string
+      aws_hub_account_id:
+        description: 'AWS Hub Account ID'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy-NX-projects:
+    runs-on: ubuntu-latest
+    env:
+      BRANCH_NAME: ${{ inputs.branch != '' && inputs.branch || (github.ref == 'refs/heads/main' && 'main' || 'dev') }}
+
+    environment:
+      name: ${{ github.ref == 'refs/heads/main' && 'Production' || 'Development' }}
+
+    outputs:
+      projects: ${{ steps.identify_effected_projects.outputs.projects }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Nx Project
+        id: nx_setup
+        uses: ./.github/actions/nx-setup
+        with:
+          only-nx: 'true'
+
+      - name: Identify effected projects nx
+        id: identify_effected_projects
+        uses: ./.github/actions/identify-affected-proj
+        with:
+          branch: ${{ env.BRANCH_NAME }}
+
+  # DB-update:
+  #   runs-on:
+  #     - codebuild-gh-runner-mamram-managed-${{ github.ref == 'refs/heads/main' && 'prd' || 'dev' }}-${{ github.run_id }}-${{ github.run_attempt }}
+  #     - image:ubuntu-7.0
+  #     - instance-size:large
+  #   needs: deploy-NX-projects
+  #   environment:
+  #     name: ${{ github.ref == 'refs/heads/main' && 'Production' || 'Development' }}
+
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v3
+
+  #     - name: Set up Node.js
+  #       uses: actions/setup-node@v3
+      
+  #     - name: Setup Nx Project
+  #       id: nx_setup
+  #       uses: ./.github/actions/nx-setup
+
+  #     - name: DB Update
+  #       id: db_update
+  #       shell: bash
+  #       run: |
+  #         echo "Checking and applying DB migrations"
+  #         npx nx run portal-backend:db-push
+  #       env:
+  #         AURORA_DB_HOST: ${{ secrets.AURORA_DB_HOST }}
+  #         AURORA_DB_NAME: ${{ secrets.AURORA_DB_NAME }}
+  #         AURORA_DB_USER: ${{ secrets.AURORA_DB_USER }}
+  #         AURORA_DB_PASSWORD: ${{ secrets.AURORA_DB_PASSWORD }}
+  #         AURORA_DB_PORT: ${{ secrets.AURORA_DB_PORT }}
+
+  matrix-projects:
+    runs-on:
+      - codebuild-gh-runner-mamram-managed-${{ github.ref == 'refs/heads/main' && 'prd' || 'dev' }}-${{ github.run_id }}-${{ github.run_attempt }}
+      - image:ubuntu-7.0
+      - instance-size:large
+    needs: deploy-NX-projects
+
+    env:
+      BRANCH_NAME: ${{ inputs.branch != '' && inputs.branch || (github.ref == 'refs/heads/main' && 'main' || 'dev') }}
+      AWS_ACCOUNT: ${{ inputs.aws_account_id != '' && inputs.aws_account_id || vars.AWS_ACCOUNT_ID }}
+      AWS_HUB_ACCOUNT: ${{ inputs.aws_hub_account_id != '' && inputs.aws_hub_account_id || vars.AWS_HUB_ACCOUNT_ID }}
+
+    strategy:
+      matrix:
+        project: ${{ fromJson(needs.deploy-NX-projects.outputs.projects) }}
+
+    environment:
+      name: ${{ github.ref == 'refs/heads/main' && 'Production' || 'Development' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+
+      - name: Setup Nx Project
+        id: nx_setup
+        uses: ./.github/actions/nx-setup
+
+      - name: Assume Role Action
+        id: assume_role_action
+        uses: ./.github/actions/assume-role
+        with:
+          AWS_ACCOUNT: ${{ env.AWS_ACCOUNT }}
+          AWS_HUB_ACCOUNT: ${{ env.AWS_HUB_ACCOUNT }}
+          role_type: 'applicative'
+
+      # Uncomment when tests are ready
+      # - name: Run Nx Tests
+      #   run: |
+      #     echo "Running tests for project: ${{ matrix.project }}"
+      #     npx nx test ${{ matrix.project }} --code-coverage
+
+      - name: Build Project Action
+        id: build_project_action
+        uses: ./.github/actions/build-project
+        with:
+          project: ${{ matrix.project }}
+
+      - name: Build and Push the project
+        id: build_publish
+        uses: ./.github/actions/build-push
+        with:
+          branch: ${{ env.BRANCH_NAME }}
+          project: ${{ matrix.project }}
+          ECR_REGISTRY: ${{ steps.assume_role_action.outputs.registry }}
+          ECS_CLUSTER: 'portal'

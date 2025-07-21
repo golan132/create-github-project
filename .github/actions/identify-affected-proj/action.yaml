@@ -1,0 +1,73 @@
+name: 'Identify affected projects nx'
+description: 'This action identifies the affected project based on branch.'
+
+inputs:
+  branch:
+    description: 'The base branch.'
+    default: 'main'
+
+  all-projects:
+    description: 'Get all the projects.'
+    default: 'false'
+
+outputs:
+  projects:
+    description: 'The affected projects as a JSON array.'
+    value: ${{ steps.affected-projects.outputs.projects }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Fetch full git history
+      shell: bash
+      run: |
+        git fetch origin ${{ inputs.branch }} --depth=100
+        git checkout ${{ inputs.branch }}
+
+    - name: Identify affected projects
+      id: affected-projects
+      shell: bash
+      run: |
+        echo "Fetching affected projects..."
+
+        if [[ "${{ inputs.all-projects }}" == "true" ]]; then
+          echo "Getting all projects..."
+          all_projects=$(npx nx show projects --type=app --json)
+
+          if ! echo "$all_projects" | jq empty; then
+            echo "Invalid JSON from npx nx show projects"
+            exit 1
+          fi
+
+          projects_list=($(echo "$all_projects" | jq -r '.[]'))
+        else
+          # Ensure base and head are correctly set
+          if [[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/${{ inputs.branch }})" ]]; then
+            BASE=$(git rev-parse HEAD~1)
+          else
+            BASE=$(git merge-base origin/${{ inputs.branch }} HEAD)
+          fi
+
+          HEAD=$(git rev-parse HEAD)
+
+          echo "Base: $BASE, Head: $HEAD"
+
+          affected_projects=$(npx nx show projects --type=app --affected --base=$BASE --head=$HEAD --target=build --json)
+
+          if ! echo "$affected_projects" | jq empty; then
+            echo "Invalid JSON from npx nx show projects"
+            exit 1
+          fi
+
+          projects_list=($(echo "$affected_projects" | jq -r '.[]'))
+        fi
+
+        echo "Debug: Projects: ${projects_list[@]}"
+
+        if [[ ${#projects_list[@]} -eq 0 ]]; then
+          echo 'projects=[]' >> "$GITHUB_OUTPUT"
+        else
+          formatted_projects=$(printf '%s\n' "${projects_list[@]}" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "projects=$formatted_projects" >> "$GITHUB_OUTPUT"
+          echo "Debug: Writing to output: projects=$formatted_projects"
+        fi
