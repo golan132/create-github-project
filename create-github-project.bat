@@ -10,18 +10,8 @@ setlocal enabledelayedexpansion
 echo.
 echo ===== Project Setup =====
 echo Project type options:
-echo 1. NX Workspace (with NestJS/React::ロ Always copy release-please.yml for all project types
-if exist "..\\.github\workflows\release-please.yml" (
-    echo Copying release-please workflow...
-    copy "..\\.github\workflows\release-please.yml" ".github\workflows\" /Y >nul
-    if !errorlevel! neq 0 (
-        echo WARNING: Failed to copy release-please.yml
-    ) else (
-        echo release-please.yml copied successfully.
-    )
-) else (
-    echo WARNING: release-please.yml not found at ..\\.github\workflows\
-)o 2. Simple Git Repository (empty repo)
+echo 1. NX Workspace (with NestJS/React)
+echo 2. Simple Git Repository (empty repo)
 echo 3. Terraform Infrastructure Project
 echo 4. Full Stack Project (NX + Terraform)
 echo.
@@ -480,17 +470,28 @@ if not exist ".github" mkdir ".github"
 if not exist ".github\workflows" mkdir ".github\workflows"
 if not exist ".github\actions" mkdir ".github\actions"
 
+:: Debugging release-please.yml issue
+:: Print current working directory
+cd
+
+:: Check if release-please.yml exists
+if exist "..\create-github-project\.github\workflows\release-please.yml" (
+    echo DEBUG: release-please.yml found at ..\create-github-project\.github\workflows\release-please.yml
+) else (
+    echo DEBUG: release-please.yml NOT found at ..\create-github-project\.github\workflows\release-please.yml
+)
+
 :: Always copy release-please.yml for all project types
-if exist "..\.github\workflows\release-please.yml" (
-    echo Copying release-please workflow...
-    copy "..\.github\workflows\release-please.yml" ".github\workflows\" /Y >nul
+if exist "..\create-github-project\.github\workflows\release-please.yml" (
+    echo Copying release-please workflow from template...
+    copy "..\create-github-project\.github\workflows\release-please.yml" ".github\workflows\" /Y >nul
     if !errorlevel! neq 0 (
-        echo WARNING: Failed to copy release-please.yml
+        echo ERROR: Failed to copy release-please.yml from template.
     ) else (
-        echo release-please.yml copied successfully.
+        echo release-please.yml copied successfully from template.
     )
 ) else (
-    echo WARNING: release-please.yml not found at ..\.github\workflows\
+    echo ERROR: release-please.yml not found in template at ..\create-github-project\.github\workflows\
 )
 
 :: Copy NX-related workflows and actions for NX workspace and Full Stack projects
