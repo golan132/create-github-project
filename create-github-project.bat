@@ -10,8 +10,18 @@ setlocal enabledelayedexpansion
 echo.
 echo ===== Project Setup =====
 echo Project type options:
-echo 1. NX Workspace (with NestJS/React setup)
-echo 2. Simple Git Repository (empty repo)
+echo 1. NX Workspace (with NestJS/React::ロ Always copy release-please.yml for all project types
+if exist "..\\.github\workflows\release-please.yml" (
+    echo Copying release-please workflow...
+    copy "..\\.github\workflows\release-please.yml" ".github\workflows\" /Y >nul
+    if !errorlevel! neq 0 (
+        echo WARNING: Failed to copy release-please.yml
+    ) else (
+        echo release-please.yml copied successfully.
+    )
+) else (
+    echo WARNING: release-please.yml not found at ..\\.github\workflows\
+)o 2. Simple Git Repository (empty repo)
 echo 3. Terraform Infrastructure Project
 echo 4. Full Stack Project (NX + Terraform)
 echo.
