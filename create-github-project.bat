@@ -179,6 +179,39 @@ if "!project_type!"=="1" (
     set "create_client=n"
 )
 
+:: Ask for shared libraries setup (for NX workspace and Full Stack projects)
+if "!project_type!"=="1" (
+    echo.
+    echo ===== NX Shared Libraries Setup =====
+    echo Do you want to create shared libraries that can be used across the project?
+    echo These will include: enums, types, utils with @!project_name!/[lib-name] imports
+    set /p "create_shared_libs=Create shared libraries? (y/n): "
+    set "create_shared_libs=!create_shared_libs: =!"
+    
+    :: Validate shared libraries choice
+    if /i not "!create_shared_libs!"=="y" if /i not "!create_shared_libs!"=="n" (
+        echo ERROR: Invalid choice. Please enter 'y' or 'n'.
+        pause
+        exit /b 1
+    )
+) else if "!project_type!"=="4" (
+    echo.
+    echo ===== Full Stack Shared Libraries Setup =====
+    echo Do you want to create shared libraries that can be used across the project?
+    echo These will include: enums, types, utils with @!project_name!/[lib-name] imports
+    set /p "create_shared_libs=Create shared libraries? (y/n): "
+    set "create_shared_libs=!create_shared_libs: =!"
+    
+    :: Validate shared libraries choice
+    if /i not "!create_shared_libs!"=="y" if /i not "!create_shared_libs!"=="n" (
+        echo ERROR: Invalid choice. Please enter 'y' or 'n'.
+        pause
+        exit /b 1
+    )
+) else (
+    set "create_shared_libs=n"
+)
+
 :: Ask for GitHub repo visibility
 echo.
 echo ===== GitHub Repository Setup =====
@@ -241,6 +274,9 @@ if "!project_type!"=="1" if /i "!create_server!"=="y" if /i "!create_client!"=="
     echo Create Server: !create_server!
     echo Create Client: !create_client!
 )
+if "!project_type!"=="1" if /i "!create_shared_libs!"=="y" (
+    echo Shared Libraries: enums, types, utils with @!project_name!/[lib-name] imports
+)
 if "!project_type!"=="3" (
     echo Terraform: Infrastructure files will be copied
     echo GitHub Actions: Terraform workflows will be included
@@ -249,6 +285,7 @@ if "!project_type!"=="3" (
     echo GitHub Actions: Both NX and Terraform workflows will be included
     if /i "!create_server!"=="y" echo Nest App Name: !nest_app_name!
     if /i "!create_client!"=="y" echo React App Name: !react_app_name!
+    if /i "!create_shared_libs!"=="y" echo Shared Libraries: enums, types, utils with @!project_name!/[lib-name] imports
 ) else if "!project_type!"=="1" (
     echo GitHub Actions: NX workflows will be included
 )
@@ -363,25 +400,65 @@ if "!project_type!"=="1" if /i "!create_client!"=="y" (
     echo React application created successfully.
 )
 
-:: Create shared types lib only if both server and client exist (for NX workspace and Full Stack projects)
-if "!project_type!"=="1" if /i "!create_server!"=="y" if /i "!create_client!"=="y" (
+:: Create shared libraries if requested (for NX workspace and Full Stack projects)
+if "!project_type!"=="1" if /i "!create_shared_libs!"=="y" (
     echo.
-    echo Creating shared types library...
+    echo Creating shared libraries ^(enums, types, utils^)...
+    
+    :: Create types library
     CALL npx nx g @nrwl/js:lib types --bundler=swc --unitTestRunner=none --directory=libs --projectNameAndRootFormat=derived
     if !errorlevel! neq 0 (
-        echo WARNING: Failed to create shared types library.
+        echo WARNING: Failed to create types library.
     ) else (
-        echo Shared types library created successfully.
+        echo types library created successfully.
     )
-) else if "!project_type!"=="4" if /i "!create_server!"=="y" if /i "!create_client!"=="y" (
+    
+    :: Create enums library
+    CALL npx nx g @nrwl/js:lib enums --bundler=swc --unitTestRunner=none --directory=libs --projectNameAndRootFormat=derived
+    if !errorlevel! neq 0 (
+        echo WARNING: Failed to create enums library.
+    ) else (
+        echo enums library created successfully.
+    )
+    
+    :: Create utils library
+    CALL npx nx g @nrwl/js:lib utils --bundler=swc --unitTestRunner=none --directory=libs --projectNameAndRootFormat=derived
+    if !errorlevel! neq 0 (
+        echo WARNING: Failed to create utils library.
+    ) else (
+        echo utils library created successfully.
+    )
+    
+    echo All shared libraries created with imports: @!project_name!/types, @!project_name!/enums, @!project_name!/utils
+) else if "!project_type!"=="4" if /i "!create_shared_libs!"=="y" (
     echo.
-    echo Creating shared types library for Full Stack project...
+    echo Creating shared libraries ^(enums, types, utils^) for Full Stack project...
+    
+    :: Create types library
     CALL npx nx g @nrwl/js:lib types --bundler=swc --unitTestRunner=none --directory=libs --projectNameAndRootFormat=derived
     if !errorlevel! neq 0 (
-        echo WARNING: Failed to create shared types library.
+        echo WARNING: Failed to create types library.
     ) else (
-        echo Shared types library created successfully.
+        echo types library created successfully.
     )
+    
+    :: Create enums library
+    CALL npx nx g @nrwl/js:lib enums --bundler=swc --unitTestRunner=none --directory=libs --projectNameAndRootFormat=derived
+    if !errorlevel! neq 0 (
+        echo WARNING: Failed to create enums library.
+    ) else (
+        echo enums library created successfully.
+    )
+    
+    :: Create utils library
+    CALL npx nx g @nrwl/js:lib utils --bundler=swc --unitTestRunner=none --directory=libs --projectNameAndRootFormat=derived
+    if !errorlevel! neq 0 (
+        echo WARNING: Failed to create utils library.
+    ) else (
+        echo utils library created successfully.
+    )
+    
+    echo All shared libraries created with imports: @!project_name!/types, @!project_name!/enums, @!project_name!/utils
 )
 
 :: Add scripts (for NX workspace and Full Stack projects)
@@ -736,6 +813,9 @@ if "!project_type!"=="1" (
         echo - NestJS Server: !nest_app_name!
         echo - Start server: npm run start:server
     )
+    if /i "!create_shared_libs!"=="y" (
+        echo - Shared Libraries: @!project_name!/types, @!project_name!/enums, @!project_name!/utils
+    )
 ) else if "!project_type!"=="2" (
     echo Type: Simple Git Repository
 ) else if "!project_type!"=="3" (
@@ -752,6 +832,9 @@ if "!project_type!"=="1" (
     if /i "!create_server!"=="y" (
         echo - NestJS Server: !nest_app_name!
         echo - Start server: npm run start:server
+    )
+    if /i "!create_shared_libs!"=="y" (
+        echo - Shared Libraries: @!project_name!/types, @!project_name!/enums, @!project_name!/utils
     )
     echo - GitHub Actions for both NX and Terraform deployment
 )
