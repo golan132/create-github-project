@@ -406,7 +406,7 @@ if "!project_type!"=="1" if /i "!create_shared_libs!"=="y" (
     echo Creating shared libraries ^(enums, types, utils^)...
     
     :: Create types library
-    CALL npx nx g @nrwl/js:lib types --bundler=swc --unitTestRunner=none --directory=libs --projectNameAndRootFormat=derived
+    CALL npx nx g @nrwl/js:lib types --bundler=swc --unitTestRunner=none --directory=libs/types --projectNameAndRootFormat=as-provided
     if !errorlevel! neq 0 (
         echo WARNING: Failed to create types library.
     ) else (
@@ -414,7 +414,7 @@ if "!project_type!"=="1" if /i "!create_shared_libs!"=="y" (
     )
     
     :: Create enums library
-    CALL npx nx g @nrwl/js:lib enums --bundler=swc --unitTestRunner=none --directory=libs --projectNameAndRootFormat=derived
+    CALL npx nx g @nrwl/js:lib enums --bundler=swc --unitTestRunner=none --directory=libs/enums --projectNameAndRootFormat=as-provided
     if !errorlevel! neq 0 (
         echo WARNING: Failed to create enums library.
     ) else (
@@ -422,7 +422,7 @@ if "!project_type!"=="1" if /i "!create_shared_libs!"=="y" (
     )
     
     :: Create utils library
-    CALL npx nx g @nrwl/js:lib utils --bundler=swc --unitTestRunner=none --directory=libs --projectNameAndRootFormat=derived
+    CALL npx nx g @nrwl/js:lib utils --bundler=swc --unitTestRunner=none --directory=libs/utils --projectNameAndRootFormat=as-provided
     if !errorlevel! neq 0 (
         echo WARNING: Failed to create utils library.
     ) else (
@@ -435,7 +435,7 @@ if "!project_type!"=="1" if /i "!create_shared_libs!"=="y" (
     echo Creating shared libraries ^(enums, types, utils^) for Full Stack project...
     
     :: Create types library
-    CALL npx nx g @nrwl/js:lib types --bundler=swc --unitTestRunner=none --directory=libs --projectNameAndRootFormat=derived
+    CALL npx nx g @nrwl/js:lib types --bundler=swc --unitTestRunner=none --directory=libs/types --projectNameAndRootFormat=as-provided
     if !errorlevel! neq 0 (
         echo WARNING: Failed to create types library.
     ) else (
@@ -443,7 +443,7 @@ if "!project_type!"=="1" if /i "!create_shared_libs!"=="y" (
     )
     
     :: Create enums library
-    CALL npx nx g @nrwl/js:lib enums --bundler=swc --unitTestRunner=none --directory=libs --projectNameAndRootFormat=derived
+    CALL npx nx g @nrwl/js:lib enums --bundler=swc --unitTestRunner=none --directory=libs/enums --projectNameAndRootFormat=as-provided
     if !errorlevel! neq 0 (
         echo WARNING: Failed to create enums library.
     ) else (
@@ -451,7 +451,7 @@ if "!project_type!"=="1" if /i "!create_shared_libs!"=="y" (
     )
     
     :: Create utils library
-    CALL npx nx g @nrwl/js:lib utils --bundler=swc --unitTestRunner=none --directory=libs --projectNameAndRootFormat=derived
+    CALL npx nx g @nrwl/js:lib utils --bundler=swc --unitTestRunner=none --directory=libs/utils --projectNameAndRootFormat=as-provided
     if !errorlevel! neq 0 (
         echo WARNING: Failed to create utils library.
     ) else (
