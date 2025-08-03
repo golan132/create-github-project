@@ -17,23 +17,8 @@ echo 4. Full Stack Project (NX + Terraform)
 echo.
 set /p "project_type=Choose project type (1, 2, 3, or 4): "
 set "project_type=!project_type: =!"
-:: Git initialization
-echo.
-echo Initializing Git repository...
-git init
-if !errorlevel! neq 0 (
-    echo ERROR: Failed to initialize Git repository.
-    pause
-    exit /b 1
-)
 
-:: Ensure we're on main branch (for compatibility with older Git versions)
-git checkout -b main 2>nul || git branch -M main
-if !errorlevel! neq 0 (
-    echo ERROR: Failed to set main branch.
-    pause
-    exit /b 1
-)ate project type input
+:: Validate project type input
 if not "!project_type!"=="1" if not "!project_type!"=="2" if not "!project_type!"=="3" if not "!project_type!"=="4" (
     echo ERROR: Invalid project type. Please choose 1, 2, 3, or 4.
     pause
@@ -726,6 +711,44 @@ echo GitHub Actions workflows setup completed.
 :: GIT AND GITHUB SETUP
 :: =============================================================================
 
+:: Check if GitHub CLI is installed
+echo.
+echo Checking if GitHub CLI is installed...
+gh --version >nul 2>&1
+if !errorlevel! neq 0 (
+    echo ERROR: GitHub CLI ^(gh^) is not installed.
+    echo.
+    echo Please install GitHub CLI to continue:
+    echo 1. Visit: https://cli.github.com/
+    echo 2. Download and install GitHub CLI for Windows
+    echo 3. Restart your command prompt
+    echo 4. Run this script again
+    echo.
+    echo Alternatively, you can install via winget:
+    echo   winget install GitHub.cli
+    echo.
+    pause
+    exit /b 1
+)
+echo GitHub CLI is installed.
+
+:: Check if Git is installed
+echo Checking if Git is installed...
+git --version >nul 2>&1
+if !errorlevel! neq 0 (
+    echo ERROR: Git is not installed.
+    echo.
+    echo Please install Git to continue:
+    echo 1. Visit: https://git-scm.com/downloads
+    echo 2. Download and install Git for Windows
+    echo 3. Restart your command prompt
+    echo 4. Run this script again
+    echo.
+    pause
+    exit /b 1
+)
+echo Git is installed.
+
 :: Git initialization
 echo.
 echo Initializing Git repository...
@@ -767,6 +790,49 @@ if !errorlevel! neq 0 (
 )
 echo Git repository initialized successfully.
 
+:: Check GitHub CLI authentication
+echo.
+echo Checking GitHub CLI authentication...
+gh auth status >nul 2>&1
+if !errorlevel! neq 0 (
+    echo WARNING: GitHub CLI is not authenticated.
+    echo You need to authenticate with GitHub CLI to create the repository.
+    echo.
+    set /p "auth_choice=Do you want to authenticate now? (y/n): "
+    set "auth_choice=!auth_choice: =!"
+    
+    if /i "!auth_choice!"=="y" (
+        echo.
+        echo Opening GitHub CLI authentication...
+        echo Please follow the instructions in your browser to authenticate.
+        gh auth login
+        if !errorlevel! neq 0 (
+            echo ERROR: GitHub CLI authentication failed.
+            echo Please run 'gh auth login' manually and try the script again.
+            pause
+            exit /b 1
+        )
+        echo GitHub CLI authentication successful.
+    ) else (
+        echo.
+        echo GitHub repository creation will be skipped.
+        echo You can create the repository manually later or run the script again.
+        echo The local Git repository has been created successfully.
+        echo.
+        echo To create the GitHub repository manually:
+        echo 1. Run: gh auth login
+        if not "!organization!"=="" (
+            echo 2. Run: gh repo create !organization!/!project_name! --!repo_visibility! --source=. --remote=origin --push
+        ) else (
+            echo 2. Run: gh repo create !project_name! --!repo_visibility! --source=. --remote=origin --push
+        )
+        echo.
+        pause
+        exit /b 0
+    )
+)
+echo GitHub CLI authentication verified.
+
 :: Create and push GitHub repo with selected visibility
 echo.
 echo Creating GitHub repository...
@@ -776,7 +842,21 @@ if not "!organization!"=="" (
     gh repo create !project_name! --!repo_visibility! --source=. --remote=origin --push
 )
 if !errorlevel! neq 0 (
-    echo ERROR: Failed to create GitHub repository. Please check your GitHub CLI authentication.
+    echo ERROR: Failed to create GitHub repository.
+    echo.
+    echo Possible solutions:
+    echo 1. Check your GitHub CLI authentication: gh auth status
+    echo 2. Re-authenticate if needed: gh auth login
+    echo 3. Verify you have permission to create repositories
+    if not "!organization!"=="" (
+        echo 4. Verify you have access to the organization: !organization!
+        echo 5. Check if repository !organization!/!project_name! already exists
+    ) else (
+        echo 4. Check if repository !project_name! already exists in your account
+    )
+    echo.
+    echo The local project has been created successfully.
+    echo You can create the GitHub repository manually later.
     pause
     exit /b 1
 )
