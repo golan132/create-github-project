@@ -17,8 +17,23 @@ echo 4. Full Stack Project (NX + Terraform)
 echo.
 set /p "project_type=Choose project type (1, 2, 3, or 4): "
 set "project_type=!project_type: =!"
+:: Git initialization
+echo.
+echo Initializing Git repository...
+git init
+if !errorlevel! neq 0 (
+    echo ERROR: Failed to initialize Git repository.
+    pause
+    exit /b 1
+)
 
-:: Validate project type input
+:: Ensure we're on main branch (for compatibility with older Git versions)
+git checkout -b main 2>nul || git branch -M main
+if !errorlevel! neq 0 (
+    echo ERROR: Failed to set main branch.
+    pause
+    exit /b 1
+)ate project type input
 if not "!project_type!"=="1" if not "!project_type!"=="2" if not "!project_type!"=="3" if not "!project_type!"=="4" (
     echo ERROR: Invalid project type. Please choose 1, 2, 3, or 4.
     pause
@@ -714,9 +729,17 @@ echo GitHub Actions workflows setup completed.
 :: Git initialization
 echo.
 echo Initializing Git repository...
-git init --initial-branch=main
+git init
 if !errorlevel! neq 0 (
     echo ERROR: Failed to initialize Git repository.
+    pause
+    exit /b 1
+)
+
+:: Ensure we're on main branch (for compatibility with older Git versions)
+git checkout -b main 2>nul || git branch -M main
+if !errorlevel! neq 0 (
+    echo ERROR: Failed to set main branch.
     pause
     exit /b 1
 )
@@ -759,6 +782,14 @@ if !errorlevel! neq 0 (
 )
 echo GitHub repository created and pushed successfully.
 
+:: Ensure main is set as default branch on GitHub
+echo.
+echo Setting main as default branch on GitHub...
+gh repo edit --default-branch main
+if !errorlevel! neq 0 (
+    echo WARNING: Failed to set main as default branch on GitHub. You can set this manually in GitHub settings.
+)
+
 :: Create and push dev branch
 echo.
 echo Creating development branch...
@@ -774,13 +805,6 @@ if !errorlevel! neq 0 (
     echo ERROR: Failed to push dev branch.
     pause
     exit /b 1
-)
-
-:: Set main as default branch on GitHub (optional)
-echo Setting main as default branch on GitHub...
-gh repo edit --default-branch main
-if !errorlevel! neq 0 (
-    echo WARNING: Failed to set main as default branch on GitHub. You can set this manually in GitHub settings.
 )
 
 echo Development branch created and pushed successfully.
