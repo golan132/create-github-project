@@ -304,6 +304,70 @@ if /i not "!confirm!"=="y" (
 :: PROJECT CREATION
 :: =============================================================================
 
+:: Check and fix npm setup issues
+echo.
+echo Checking npm configuration...
+
+:: Check if npm is installed
+npm --version >nul 2>&1
+if !errorlevel! neq 0 (
+    echo ERROR: npm is not installed.
+    echo.
+    echo Please install Node.js which includes npm:
+    echo 1. Visit: https://nodejs.org/
+    echo 2. Download and install the LTS version
+    echo 3. Restart your command prompt
+    echo 4. Run this script again
+    echo.
+    pause
+    exit /b 1
+)
+
+:: Fix npm global directory issue if it doesn't exist
+set "npm_global_dir=%APPDATA%\npm"
+if not exist "!npm_global_dir!" (
+    echo Creating npm global directory...
+    mkdir "!npm_global_dir!" 2>nul
+    if !errorlevel! neq 0 (
+        echo WARNING: Could not create npm global directory. Trying alternative approach...
+        :: Try to run npm config to initialize directories
+        npm config get prefix >nul 2>&1
+    )
+)
+
+:: Check if npx is available
+npx --version >nul 2>&1
+if !errorlevel! neq 0 (
+    echo ERROR: npx is not available.
+    echo Please update Node.js to a version that includes npx.
+    pause
+    exit /b 1
+)
+
+echo npm configuration verified.
+
+:: Suggest npm update if there's a newer version available
+echo Checking for npm updates...
+npm outdated -g npm >nul 2>&1
+if !errorlevel! equ 0 (
+    echo.
+    echo INFO: A newer version of npm is available.
+    echo Consider updating npm for better performance: npm install -g npm@latest
+    echo.
+    set /p "update_npm=Would you like to update npm now? (y/n): "
+    set "update_npm=!update_npm: =!"
+    
+    if /i "!update_npm!"=="y" (
+        echo Updating npm...
+        npm install -g npm@latest
+        if !errorlevel! neq 0 (
+            echo WARNING: Failed to update npm. Continuing with current version...
+        ) else (
+            echo npm updated successfully.
+        )
+    )
+)
+
 :: Navigate to parent directory to create the new project
 echo.
 echo Navigating to parent directory...
@@ -317,10 +381,64 @@ if "!project_type!"=="1" (
     echo Setting up NX workspace...
     if /i "!create_server!"=="y" (
         echo Creating NX workspace with NestJS preset...
+        echo This may take a few minutes...
         CALL npx create-nx-workspace !project_name! --preset=nest --nxCloud=skip --packageManager=npm --appName=!nest_app_name! --e2eTestRunner=none --workspaceType=integrated --docker=false
+        set "nx_creation_result=!errorlevel!"
     ) else (
         echo Creating basic NX workspace...
+        echo This may take a few minutes...
         CALL npx create-nx-workspace !project_name! --preset=apps --nxCloud=skip --packageManager=npm --workspaceType=integrated
+        set "nx_creation_result=!errorlevel!"
+    )
+
+    :: Check if NX creation failed
+    if !nx_creation_result! neq 0 (
+        echo.
+        echo WARNING: NX workspace creation failed. Trying alternative approach...
+        
+        :: Try clearing npm cache and retry
+        echo Clearing npm cache...
+        npm cache clean --force >nul 2>&1
+        
+        :: Try creating the directory manually and then initialize
+        if not exist "!project_name!" mkdir "!project_name!"
+        cd "!project_name!"
+        
+        :: Try alternative approach with npm init
+        echo Trying alternative project setup...
+        npm init -y >nul 2>&1
+        
+        :: Create basic package.json for NX workspace
+        echo {> package.json
+        echo   "name": "!project_name!",>> package.json
+        echo   "version": "0.0.0",>> package.json
+        echo   "license": "MIT",>> package.json
+        echo   "scripts": {},>> package.json
+        echo   "private": true,>> package.json
+        echo   "devDependencies": {}>> package.json
+        echo }>> package.json
+        
+        :: Try installing NX directly
+        echo Installing NX...
+        npm install --save-dev @nrwl/workspace@latest nx@latest
+        if !errorlevel! neq 0 (
+            echo ERROR: Failed to install NX. Please check your npm installation.
+            echo.
+            echo Possible solutions:
+            echo 1. Update Node.js to the latest LTS version
+            echo 2. Clear npm cache: npm cache clean --force
+            echo 3. Check your internet connection
+            echo 4. Try running as administrator
+            echo.
+            pause
+            exit /b 1
+        )
+        
+        :: Initialize NX workspace
+        echo Initializing NX workspace...
+        npx nx init
+        
+        cd ..
     )
 
     :: Check if workspace directory was created successfully
@@ -335,10 +453,64 @@ if "!project_type!"=="1" (
     echo Setting up Full Stack NX workspace...
     if /i "!create_server!"=="y" (
         echo Creating NX workspace with NestJS preset...
+        echo This may take a few minutes...
         CALL npx create-nx-workspace !project_name! --preset=nest --nxCloud=skip --packageManager=npm --appName=!nest_app_name! --e2eTestRunner=none --workspaceType=integrated --docker=false
+        set "nx_creation_result=!errorlevel!"
     ) else (
         echo Creating basic NX workspace...
+        echo This may take a few minutes...
         CALL npx create-nx-workspace !project_name! --preset=apps --nxCloud=skip --packageManager=npm --workspaceType=integrated
+        set "nx_creation_result=!errorlevel!"
+    )
+
+    :: Check if NX creation failed
+    if !nx_creation_result! neq 0 (
+        echo.
+        echo WARNING: NX workspace creation failed. Trying alternative approach...
+        
+        :: Try clearing npm cache and retry
+        echo Clearing npm cache...
+        npm cache clean --force >nul 2>&1
+        
+        :: Try creating the directory manually and then initialize
+        if not exist "!project_name!" mkdir "!project_name!"
+        cd "!project_name!"
+        
+        :: Try alternative approach with npm init
+        echo Trying alternative project setup...
+        npm init -y >nul 2>&1
+        
+        :: Create basic package.json for NX workspace
+        echo {> package.json
+        echo   "name": "!project_name!",>> package.json
+        echo   "version": "0.0.0",>> package.json
+        echo   "license": "MIT",>> package.json
+        echo   "scripts": {},>> package.json
+        echo   "private": true,>> package.json
+        echo   "devDependencies": {}>> package.json
+        echo }>> package.json
+        
+        :: Try installing NX directly
+        echo Installing NX...
+        npm install --save-dev @nrwl/workspace@latest nx@latest
+        if !errorlevel! neq 0 (
+            echo ERROR: Failed to install NX. Please check your npm installation.
+            echo.
+            echo Possible solutions:
+            echo 1. Update Node.js to the latest LTS version
+            echo 2. Clear npm cache: npm cache clean --force
+            echo 3. Check your internet connection
+            echo 4. Try running as administrator
+            echo.
+            pause
+            exit /b 1
+        )
+        
+        :: Initialize NX workspace
+        echo Initializing NX workspace...
+        npx nx init
+        
+        cd ..
     )
 
     :: Check if workspace directory was created successfully
