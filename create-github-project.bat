@@ -304,14 +304,18 @@ if /i not "!confirm!"=="y" (
 :: PROJECT CREATION
 :: =============================================================================
 
+
 :: Check and fix npm setup issues
 echo.
 echo Checking npm configuration...
+echo DEBUG: Entered npm configuration check
 
 :: Check if npm is installed
-npm --version >nul 2>&1
-if !errorlevel! neq 0 (
-    echo ERROR: npm is not installed.
+echo DEBUG: Checking npm version...
+for /f "delims=" %%v in ('npm --version 2^>^&1') do set "npm_version=%%v"
+echo DEBUG: npm --version output: !npm_version!
+if "!npm_version!"=="" (
+    echo ERROR: npm is not installed or not found in PATH.
     echo.
     echo Please install Node.js which includes npm:
     echo 1. Visit: https://nodejs.org/
@@ -322,12 +326,15 @@ if !errorlevel! neq 0 (
     pause
     exit /b 1
 )
+echo DEBUG: npm version found: !npm_version!
 
 :: Fix npm global directory issue if it doesn't exist
+echo DEBUG: Checking npm global directory...
 set "npm_global_dir=%APPDATA%\npm"
 if not exist "!npm_global_dir!" (
     echo Creating npm global directory...
     mkdir "!npm_global_dir!" 2>nul
+    echo DEBUG: mkdir npm_global_dir errorlevel=!errorlevel!
     if !errorlevel! neq 0 (
         echo WARNING: Could not create npm global directory. Trying alternative approach...
         :: Try to run npm config to initialize directories
@@ -336,19 +343,26 @@ if not exist "!npm_global_dir!" (
 )
 
 :: Check if npx is available
-npx --version >nul 2>&1
-if !errorlevel! neq 0 (
-    echo ERROR: npx is not available.
+echo DEBUG: Checking npx version...
+for /f "delims=" %%v in ('npx --version 2^>^&1') do set "npx_version=%%v"
+echo DEBUG: npx --version output: !npx_version!
+if "!npx_version!"=="" (
+    echo ERROR: npx is not available or not found in PATH.
     echo Please update Node.js to a version that includes npx.
     pause
     exit /b 1
 )
+echo DEBUG: npx version found: !npx_version!
 
+echo DEBUG: npm and npx configuration verified.
 echo npm configuration verified.
 
 :: Suggest npm update if there's a newer version available
 echo Checking for npm updates...
-npm outdated -g npm >nul 2>&1
+echo DEBUG: Checking for npm outdated...
+for /f "delims=" %%o in ('npm outdated -g npm 2^>^&1') do set "npm_outdated=%%o"
+echo DEBUG: npm outdated -g npm output: !npm_outdated!
+echo DEBUG: npm outdated check errorlevel=!errorlevel!
 if !errorlevel! equ 0 (
     echo.
     echo INFO: A newer version of npm is available.
@@ -372,11 +386,12 @@ if !errorlevel! equ 0 (
 echo.
 echo Navigating to parent directory...
 cd ..
-echo Current directory: %CD%
+echo DEBUG: Changed to parent directory, current directory: %CD%
 
 :: Create base workspace
 echo.
 echo Creating project structure...
+echo DEBUG: Project type is !project_type!
 if "!project_type!"=="1" (
     echo Setting up NX workspace...
     if /i "!create_server!"=="y" (
@@ -524,6 +539,7 @@ if "!project_type!"=="1" (
 ) else (
     echo Creating simple directory structure...
     mkdir "!project_name!"
+    echo DEBUG: mkdir project directory errorlevel=!errorlevel!
     if not exist "!project_name!" (
         echo ERROR: Failed to create project directory.
         pause
@@ -533,6 +549,7 @@ if "!project_type!"=="1" (
 )
 
 cd "!project_name!"
+echo DEBUG: Changed directory to project, current directory: %CD%
 echo Changed directory to: %CD%
 
 :: React app setup (for NX workspace and Full Stack projects)
@@ -1122,5 +1139,5 @@ if not "!organization!"=="" (
 echo Default branch: main
 echo ========================================
 echo.
-
+ 
 pause
