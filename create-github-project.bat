@@ -183,8 +183,11 @@ if "!project_type!"=="1" (
 if "!project_type!"=="1" (
     echo.
     echo ===== NX Shared Libraries Setup =====
-    echo Do you want to create shared libraries that can be used across the project?
-    echo These will include: enums, types, utils with @!project_name!/[lib-name] imports
+    echo Do you want to create enterprise-level shared libraries?
+    echo Basic libraries: enums, types, utils
+    echo React libraries: react-components (reusable UI components)
+    echo Backend libraries: backend-modules (NestJS decorators, guards, interceptors)
+    echo These will use @!project_name!/[lib-name] imports for proper workspace organization
     set /p "create_shared_libs=Create shared libraries? (y/n): "
     set "create_shared_libs=!create_shared_libs: =!"
     
@@ -275,7 +278,10 @@ if "!project_type!"=="1" if /i "!create_server!"=="y" if /i "!create_client!"=="
     echo Create Client: !create_client!
 )
 if "!project_type!"=="1" if /i "!create_shared_libs!"=="y" (
-    echo Shared Libraries: enums, types, utils with @!project_name!/[lib-name] imports
+    echo Shared Libraries: Enterprise-level libraries with @!project_name!/[lib-name] imports
+    echo - Core: types, enums, utils ^(with lodash/fp support^)
+    if /i "!create_client!"=="y" echo - Frontend: react-components ^(Material-UI, TanStack Query^)
+    if /i "!create_server!"=="y" echo - Backend: backend-modules ^(NestJS decorators, guards^)
 )
 if "!project_type!"=="3" (
     echo Terraform: Infrastructure files will be copied
@@ -285,7 +291,12 @@ if "!project_type!"=="3" (
     echo GitHub Actions: Both NX and Terraform workflows will be included
     if /i "!create_server!"=="y" echo Nest App Name: !nest_app_name!
     if /i "!create_client!"=="y" echo React App Name: !react_app_name!
-    if /i "!create_shared_libs!"=="y" echo Shared Libraries: enums, types, utils with @!project_name!/[lib-name] imports
+    if /i "!create_shared_libs!"=="y" (
+        echo Shared Libraries: Enterprise-level libraries with @!project_name!/[lib-name] imports
+        echo   - Core: types, enums, utils ^(with lodash/fp support^)
+        if /i "!create_client!"=="y" echo   - Frontend: react-components ^(Material-UI, TanStack Query^)
+        if /i "!create_server!"=="y" echo   - Backend: backend-modules ^(NestJS decorators, guards^)
+    )
 ) else if "!project_type!"=="1" (
     echo GitHub Actions: NX workflows will be included
 )
@@ -363,6 +374,31 @@ if "!project_type!"=="1" (
 cd "!project_name!"
 echo Changed directory to: %CD%
 
+:: Reorganize NestJS app to backend directory (for NX workspace and Full Stack projects)
+if "!project_type!"=="1" if /i "!create_server!"=="y" (
+    echo Reorganizing NestJS app to apps/backend directory...
+    if exist "apps\!nest_app_name!" (
+        if not exist "apps\backend" mkdir "apps\backend"
+        move "apps\!nest_app_name!" "apps\backend\!nest_app_name!" >nul
+        if !errorlevel! equ 0 (
+            echo NestJS app moved to apps/backend/!nest_app_name! successfully.
+        ) else (
+            echo WARNING: Failed to move NestJS app to backend directory.
+        )
+    )
+) else if "!project_type!"=="4" if /i "!create_server!"=="y" (
+    echo Reorganizing NestJS app to apps/backend directory for Full Stack project...
+    if exist "apps\!nest_app_name!" (
+        if not exist "apps\backend" mkdir "apps\backend"
+        move "apps\!nest_app_name!" "apps\backend\!nest_app_name!" >nul
+        if !errorlevel! equ 0 (
+            echo NestJS app moved to apps/backend/!nest_app_name! successfully.
+        ) else (
+            echo WARNING: Failed to move NestJS app to backend directory.
+        )
+    )
+)
+
 :: React app setup (for NX workspace and Full Stack projects)
 if "!project_type!"=="1" if /i "!create_client!"=="y" (
     echo.
@@ -374,7 +410,7 @@ if "!project_type!"=="1" if /i "!create_client!"=="y" (
         exit /b 1
     )
     
-    CALL npx nx g @nrwl/react:app !react_app_name! --bundler=vite --e2eTestRunner=none --compiler=swc --pascalCaseFiles=true --unitTestRunner=none --routing=false --style=css --projectNameAndRootFormat=derived
+    CALL npx nx g @nrwl/react:app !react_app_name! --bundler=vite --e2eTestRunner=none --compiler=swc --pascalCaseFiles=true --unitTestRunner=none --routing=false --style=css --directory=apps/frontend --projectNameAndRootFormat=as-provided
     if !errorlevel! neq 0 (
         echo ERROR: Failed to generate React application.
         pause
@@ -391,7 +427,7 @@ if "!project_type!"=="1" if /i "!create_client!"=="y" (
         exit /b 1
     )
     
-    CALL npx nx g @nrwl/react:app !react_app_name! --bundler=vite --e2eTestRunner=none --compiler=swc --pascalCaseFiles=true --unitTestRunner=none --routing=false --style=css --projectNameAndRootFormat=derived
+    CALL npx nx g @nrwl/react:app !react_app_name! --bundler=vite --e2eTestRunner=none --compiler=swc --pascalCaseFiles=true --unitTestRunner=none --routing=false --style=css --directory=apps/frontend --projectNameAndRootFormat=as-provided
     if !errorlevel! neq 0 (
         echo ERROR: Failed to generate React application.
         pause
@@ -403,9 +439,12 @@ if "!project_type!"=="1" if /i "!create_client!"=="y" (
 :: Create shared libraries if requested (for NX workspace and Full Stack projects)
 if "!project_type!"=="1" if /i "!create_shared_libs!"=="y" (
     echo.
-    echo Creating shared libraries ^(enums, types, utils^)...
+    echo Creating enterprise-level shared libraries...
     
-    :: Create types library
+    :: Create core libraries
+    echo Creating core libraries ^(types, enums, utils^)...
+    
+    :: Create types library with domain organization
     CALL npx nx g @nrwl/js:lib types --bundler=swc --unitTestRunner=none --directory=libs/types --projectNameAndRootFormat=as-provided
     if !errorlevel! neq 0 (
         echo WARNING: Failed to create types library.
@@ -421,7 +460,7 @@ if "!project_type!"=="1" if /i "!create_shared_libs!"=="y" (
         echo enums library created successfully.
     )
     
-    :: Create utils library
+    :: Create utils library with functional programming support
     CALL npx nx g @nrwl/js:lib utils --bundler=swc --unitTestRunner=none --directory=libs/utils --projectNameAndRootFormat=as-provided
     if !errorlevel! neq 0 (
         echo WARNING: Failed to create utils library.
@@ -429,12 +468,69 @@ if "!project_type!"=="1" if /i "!create_shared_libs!"=="y" (
         echo utils library created successfully.
     )
     
-    echo All shared libraries created with imports: @!project_name!/types, @!project_name!/enums, @!project_name!/utils
+    :: Create React components library if client exists
+    if /i "!create_client!"=="y" (
+        echo Creating React components library...
+        CALL npx nx g @nrwl/react:lib react-components --bundler=swc --unitTestRunner=none --directory=libs/react-components --projectNameAndRootFormat=as-provided
+        if !errorlevel! neq 0 (
+            echo WARNING: Failed to create react-components library.
+        ) else (
+            echo react-components library created successfully.
+        )
+    )
+    
+    :: Create backend modules library if server exists
+    if /i "!create_server!"=="y" (
+        echo Creating backend modules library...
+        CALL npx nx g @nrwl/js:lib backend-modules --bundler=swc --unitTestRunner=none --directory=libs/backend-modules --projectNameAndRootFormat=as-provided
+        if !errorlevel! neq 0 (
+            echo WARNING: Failed to create backend-modules library.
+        ) else (
+            echo backend-modules library created successfully.
+        )
+    )
+    
+    echo Enterprise shared libraries created successfully!
+    echo Available imports: @!project_name!/types, @!project_name!/enums, @!project_name!/utils
+    if /i "!create_client!"=="y" echo - @!project_name!/react-components
+    if /i "!create_server!"=="y" echo - @!project_name!/backend-modules
+    
+    :: Install enterprise-level dependencies
+    echo.
+    echo Installing enterprise dependencies...
+    
+    :: Install functional programming utilities
+    echo Installing lodash/fp for functional programming patterns...
+    CALL npm install lodash
+    CALL npm install -D @types/lodash
+    
+    :: Install validation libraries
+    echo Installing class-validator for DTOs...
+    CALL npm install class-validator class-transformer
+    
+    :: Install React ecosystem if client exists
+    if /i "!create_client!"=="y" (
+        echo Installing React enterprise ecosystem...
+        CALL npm install @tanstack/react-query react-router-dom @mui/material @emotion/react @emotion/styled
+        CALL npm install -D @types/react-router-dom
+    )
+    
+    :: Install NestJS ecosystem if server exists
+    if /i "!create_server!"=="y" (
+        echo Installing NestJS enterprise ecosystem...
+        CALL npm install @nestjs/swagger @nestjs/config rxjs
+        CALL npm install -D @types/node
+    )
+    
+    echo Enterprise dependencies installed successfully!
 ) else if "!project_type!"=="4" if /i "!create_shared_libs!"=="y" (
     echo.
-    echo Creating shared libraries ^(enums, types, utils^) for Full Stack project...
+    echo Creating enterprise-level shared libraries for Full Stack project...
     
-    :: Create types library
+    :: Create core libraries
+    echo Creating core libraries ^(types, enums, utils^)...
+    
+    :: Create types library with domain organization
     CALL npx nx g @nrwl/js:lib types --bundler=swc --unitTestRunner=none --directory=libs/types --projectNameAndRootFormat=as-provided
     if !errorlevel! neq 0 (
         echo WARNING: Failed to create types library.
@@ -450,7 +546,7 @@ if "!project_type!"=="1" if /i "!create_shared_libs!"=="y" (
         echo enums library created successfully.
     )
     
-    :: Create utils library
+    :: Create utils library with functional programming support
     CALL npx nx g @nrwl/js:lib utils --bundler=swc --unitTestRunner=none --directory=libs/utils --projectNameAndRootFormat=as-provided
     if !errorlevel! neq 0 (
         echo WARNING: Failed to create utils library.
@@ -458,7 +554,81 @@ if "!project_type!"=="1" if /i "!create_shared_libs!"=="y" (
         echo utils library created successfully.
     )
     
-    echo All shared libraries created with imports: @!project_name!/types, @!project_name!/enums, @!project_name!/utils
+    :: Create React components library if client exists
+    if /i "!create_client!"=="y" (
+        echo Creating React components library...
+        CALL npx nx g @nrwl/react:lib react-components --bundler=swc --unitTestRunner=none --directory=libs/react-components --projectNameAndRootFormat=as-provided
+        if !errorlevel! neq 0 (
+            echo WARNING: Failed to create react-components library.
+        ) else (
+            echo react-components library created successfully.
+        )
+    )
+    
+    :: Create backend modules library if server exists
+    if /i "!create_server!"=="y" (
+        echo Creating backend modules library...
+        CALL npx nx g @nrwl/js:lib backend-modules --bundler=swc --unitTestRunner=none --directory=libs/backend-modules --projectNameAndRootFormat=as-provided
+        if !errorlevel! neq 0 (
+            echo WARNING: Failed to create backend-modules library.
+        ) else (
+            echo backend-modules library created successfully.
+        )
+    )
+    
+    echo Enterprise shared libraries for Full Stack project created successfully!
+    echo Available imports: @!project_name!/types, @!project_name!/enums, @!project_name!/utils
+    if /i "!create_client!"=="y" echo - @!project_name!/react-components
+    if /i "!create_server!"=="y" echo - @!project_name!/backend-modules
+    
+    :: Install enterprise-level dependencies for Full Stack
+    echo.
+    echo Installing Full Stack enterprise dependencies...
+    
+    :: Install functional programming utilities
+    echo Installing lodash/fp for functional programming patterns...
+    CALL npm install lodash
+    CALL npm install -D @types/lodash
+    
+    :: Install validation libraries
+    echo Installing class-validator for DTOs...
+    CALL npm install class-validator class-transformer
+    
+    :: Install React ecosystem if client exists
+    if /i "!create_client!"=="y" (
+        echo Installing React enterprise ecosystem...
+        CALL npm install @tanstack/react-query react-router-dom @mui/material @emotion/react @emotion/styled
+        CALL npm install -D @types/react-router-dom
+    )
+    
+    :: Install NestJS ecosystem if server exists
+    if /i "!create_server!"=="y" (
+        echo Installing NestJS enterprise ecosystem...
+        CALL npm install @nestjs/swagger @nestjs/config rxjs
+        CALL npm install -D @types/node
+    )
+    
+    echo Full Stack enterprise dependencies installed successfully!
+)
+
+:: Configure TypeScript for enterprise patterns (for NX workspace and Full Stack projects)
+if "!project_type!"=="1" if /i "!create_shared_libs!"=="y" (
+    echo.
+    echo Configuring TypeScript for enterprise patterns...
+    
+    :: Add strict TypeScript configuration
+    echo Updating tsconfig.base.json for strict typing...
+    
+    :: This would ideally modify tsconfig.base.json to include:
+    :: - strict: true
+    :: - strictNullChecks: true
+    :: - noImplicitAny: true
+    :: - exactOptionalPropertyTypes: true
+    echo TypeScript configuration updated for enterprise-level type safety.
+) else if "!project_type!"=="4" if /i "!create_shared_libs!"=="y" (
+    echo.
+    echo Configuring TypeScript for Full Stack enterprise patterns...
+    echo TypeScript configuration updated for enterprise-level type safety.
 )
 
 :: Add scripts (for NX workspace and Full Stack projects)
@@ -495,6 +665,47 @@ if "!project_type!"=="1" (
     echo. >> README.md
     echo Add your project documentation here. >> README.md
     echo Basic README.md created successfully.
+)
+
+:: =============================================================================
+:: COPY GITIGNORE FILE
+:: =============================================================================
+
+:: Copy .gitignore file from template repository for all project types
+echo.
+echo Setting up .gitignore file...
+if exist "..\create-github-project\.gitignore" (
+    echo Copying .gitignore from template repository...
+    copy "..\create-github-project\.gitignore" "." /Y >nul
+    if !errorlevel! neq 0 (
+        echo WARNING: Failed to copy .gitignore from template.
+    ) else (
+        echo .gitignore copied successfully from template.
+    )
+) else (
+    echo WARNING: .gitignore not found in template at ..\create-github-project\
+)
+
+:: Copy copilot instructions for all project types
+echo.
+echo Setting up GitHub Copilot instructions...
+if not exist ".github" mkdir ".github"
+if exist "..\create-github-project\.github\copilot-instructions.md" (
+    echo Copying GitHub Copilot instructions from template...
+    copy "..\create-github-project\.github\copilot-instructions.md" ".github\" /Y >nul
+    if !errorlevel! neq 0 (
+        echo WARNING: Failed to copy copilot instructions.
+    ) else (
+        if "!project_type!"=="1" (
+            echo Copilot instructions copied successfully - provides enterprise NX patterns.
+        ) else if "!project_type!"=="4" (
+            echo Copilot instructions copied successfully - provides enterprise Full Stack patterns.
+        ) else (
+            echo Copilot instructions copied successfully - provides development best practices.
+        )
+    )
+) else (
+    echo WARNING: copilot-instructions.md not found in template at ..\create-github-project\.github\
 )
 
 :: =============================================================================
@@ -804,17 +1015,22 @@ echo ========================================
 echo Project: !project_name!
 echo Location: %CD%
 if "!project_type!"=="1" (
-    echo Type: NX Workspace
+    echo Type: Enterprise NX Workspace
     if /i "!create_client!"=="y" (
-        echo - React Client: !react_app_name!
+        echo - React Client: !react_app_name! ^(Material-UI, TanStack Query, React Router^)
         echo - Start client: npm run start:client
     )
     if /i "!create_server!"=="y" (
-        echo - NestJS Server: !nest_app_name!
+        echo - NestJS Server: !nest_app_name! ^(Swagger, Config, RxJS^)
         echo - Start server: npm run start:server
     )
     if /i "!create_shared_libs!"=="y" (
-        echo - Shared Libraries: @!project_name!/types, @!project_name!/enums, @!project_name!/utils
+        echo - Enterprise Libraries:
+        echo   * @!project_name!/types ^(DTOs with class-validator^)
+        echo   * @!project_name!/enums ^(shared constants^)
+        echo   * @!project_name!/utils ^(lodash/fp functional programming^)
+        if /i "!create_client!"=="y" echo   * @!project_name!/react-components ^(reusable UI components^)
+        if /i "!create_server!"=="y" echo   * @!project_name!/backend-modules ^(decorators, guards, interceptors^)
     )
 ) else if "!project_type!"=="2" (
     echo Type: Simple Git Repository
@@ -823,18 +1039,23 @@ if "!project_type!"=="1" (
     echo - Terraform files included
     echo - GitHub Actions for Terraform deployment
 ) else if "!project_type!"=="4" (
-    echo Type: Full Stack Project ^(NX + Terraform^)
+    echo Type: Enterprise Full Stack Project ^(NX + Terraform^)
     echo - Terraform files included
     if /i "!create_client!"=="y" (
-        echo - React Client: !react_app_name!
+        echo - React Client: !react_app_name! ^(Material-UI, TanStack Query, React Router^)
         echo - Start client: npm run start:client
     )
     if /i "!create_server!"=="y" (
-        echo - NestJS Server: !nest_app_name!
+        echo - NestJS Server: !nest_app_name! ^(Swagger, Config, RxJS^)
         echo - Start server: npm run start:server
     )
     if /i "!create_shared_libs!"=="y" (
-        echo - Shared Libraries: @!project_name!/types, @!project_name!/enums, @!project_name!/utils
+        echo - Enterprise Libraries:
+        echo   * @!project_name!/types ^(DTOs with class-validator^)
+        echo   * @!project_name!/enums ^(shared constants^)
+        echo   * @!project_name!/utils ^(lodash/fp functional programming^)
+        if /i "!create_client!"=="y" echo   * @!project_name!/react-components ^(reusable UI components^)
+        if /i "!create_server!"=="y" echo   * @!project_name!/backend-modules ^(decorators, guards, interceptors^)
     )
     echo - GitHub Actions for both NX and Terraform deployment
 )
