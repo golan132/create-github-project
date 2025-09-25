@@ -17,6 +17,7 @@ echo 4. Full Stack Project (NX + Terraform)
 echo.
 set /p "project_type=Choose project type (1, 2, 3, or 4): "
 set "project_type=!project_type: =!"
+echo DEBUG: Project type set to: !project_type!
 
 :: Validate project type input
 if not "!project_type!"=="1" if not "!project_type!"=="2" if not "!project_type!"=="3" if not "!project_type!"=="4" (
@@ -180,7 +181,10 @@ if "!project_type!"=="1" (
 )
 
 :: Ask for shared libraries setup (for NX workspace and Full Stack projects)
+echo DEBUG: Checking project type for shared libs prompt - project_type=!project_type!
+echo DEBUG: About to check if project_type==1
 if "!project_type!"=="1" (
+    echo DEBUG: Entered project_type 1 branch
     echo.
     echo ===== NX Shared Libraries Setup =====
     echo Do you want to create enterprise-level shared libraries?
@@ -190,6 +194,7 @@ if "!project_type!"=="1" (
     echo These will use @!project_name!/[lib-name] imports for proper workspace organization
     set /p "create_shared_libs=Create shared libraries? (y/n): "
     set "create_shared_libs=!create_shared_libs: =!"
+    echo DEBUG: After NX shared libs prompt - create_shared_libs=!create_shared_libs!
     
     :: Validate shared libraries choice
     if /i not "!create_shared_libs!"=="y" if /i not "!create_shared_libs!"=="n" (
@@ -198,6 +203,9 @@ if "!project_type!"=="1" (
         exit /b 1
     )
 ) else if "!project_type!"=="4" (
+    echo DEBUG: About to check if project_type==4
+    echo DEBUG: Entered project_type 4 branch
+    echo DEBUG: Entering Full Stack shared libs prompt - project_type=!project_type!
     echo.
     echo ===== Full Stack Shared Libraries Setup =====
     echo Do you want to create enterprise-level shared libraries?
@@ -215,6 +223,7 @@ if "!project_type!"=="1" (
         exit /b 1
     )
 ) else (
+    echo DEBUG: Entered else branch (project_type neither 1 nor 4) - project_type=!project_type!
     set "create_shared_libs=n"
 )
 
@@ -633,6 +642,7 @@ if "!project_type!"=="1" if /i "!create_client!"=="y" (
 )
 
 :: Create shared libraries if requested (for NX workspace and Full Stack projects)
+echo DEBUG: Before shared libraries creation - project_type=!project_type!, create_shared_libs=!create_shared_libs!
 echo DEBUG: Shared libraries - project_type=!project_type!, create_shared_libs=!create_shared_libs!
 if "!project_type!"=="1" if /i "!create_shared_libs!"=="y" (
     echo.
