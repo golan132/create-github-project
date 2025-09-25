@@ -1151,20 +1151,26 @@ echo Git is installed.
 
 :: Git initialization
 echo.
-echo Initializing Git repository...
-git init
+echo Initializing Git repository with main as default branch...
+git init --initial-branch=main
 if !errorlevel! neq 0 (
-    echo ERROR: Failed to initialize Git repository.
-    pause
-    exit /b 1
-)
-
-:: Ensure we're on main branch (for compatibility with older Git versions)
-git checkout -b main 2>nul || git branch -M main
-if !errorlevel! neq 0 (
-    echo ERROR: Failed to set main branch.
-    pause
-    exit /b 1
+    echo WARNING: Failed to initialize Git with --initial-branch. Trying alternative approach...
+    :: Fallback for older Git versions
+    git init
+    if !errorlevel! neq 0 (
+        echo ERROR: Failed to initialize Git repository.
+        pause
+        exit /b 1
+    )
+    :: Ensure we're on main branch (for compatibility with older Git versions)
+    git checkout -b main 2>nul || git branch -M main
+    if !errorlevel! neq 0 (
+        echo ERROR: Failed to set main branch.
+        pause
+        exit /b 1
+    )
+) else (
+    echo Git repository initialized with main branch successfully.
 )
 
 git add .
@@ -1233,9 +1239,9 @@ if !errorlevel! neq 0 (
 )
 echo GitHub CLI authentication verified.
 
-:: Create and push GitHub repo with selected visibility
+:: Create and push GitHub repo with selected visibility and main as default branch
 echo.
-echo Creating GitHub repository...
+echo Creating GitHub repository with main as default branch...
 if not "!organization!"=="" (
     gh repo create !organization!/!project_name! --!repo_visibility! --source=. --remote=origin --push
 ) else (
@@ -1264,10 +1270,12 @@ echo GitHub repository created and pushed successfully.
 
 :: Ensure main is set as default branch on GitHub
 echo.
-echo Setting main as default branch on GitHub...
+echo Confirming main as default branch on GitHub...
 gh repo edit --default-branch main
 if !errorlevel! neq 0 (
     echo WARNING: Failed to set main as default branch on GitHub. You can set this manually in GitHub settings.
+) else (
+    echo main branch confirmed as default branch on GitHub.
 )
 
 :: Create and push dev branch
