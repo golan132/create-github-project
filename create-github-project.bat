@@ -315,23 +315,156 @@ if /i not "!confirm!"=="y" (
 :: PROJECT CREATION
 :: =============================================================================
 
+
+:: Check and fix npm setup issues
+echo.
+echo Checking npm configuration...
+echo DEBUG: Entered npm configuration check
+
+:: Check if npm is installed
+echo DEBUG: Checking npm version...
+for /f "delims=" %%v in ('npm --version 2^>^&1') do set "npm_version=%%v"
+echo DEBUG: npm --version output: !npm_version!
+if "!npm_version!"=="" (
+    echo ERROR: npm is not installed or not found in PATH.
+    echo.
+    echo Please install Node.js which includes npm:
+    echo 1. Visit: https://nodejs.org/
+    echo 2. Download and install the LTS version
+    echo 3. Restart your command prompt
+    echo 4. Run this script again
+    echo.
+    pause
+    exit /b 1
+)
+echo DEBUG: npm version found: !npm_version!
+
+:: Fix npm global directory issue if it doesn't exist
+echo DEBUG: Checking npm global directory...
+set "npm_global_dir=%APPDATA%\npm"
+if not exist "!npm_global_dir!" (
+    echo Creating npm global directory...
+    mkdir "!npm_global_dir!" 2>nul
+    echo DEBUG: mkdir npm_global_dir errorlevel=!errorlevel!
+    if !errorlevel! neq 0 (
+        echo WARNING: Could not create npm global directory. Trying alternative approach...
+        :: Try to run npm config to initialize directories
+        npm config get prefix >nul 2>&1
+    )
+)
+
+:: Check if npx is available
+echo DEBUG: Checking npx version...
+for /f "delims=" %%v in ('npx --version 2^>^&1') do set "npx_version=%%v"
+echo DEBUG: npx --version output: !npx_version!
+if "!npx_version!"=="" (
+    echo ERROR: npx is not available or not found in PATH.
+    echo Please update Node.js to a version that includes npx.
+    pause
+    exit /b 1
+)
+echo DEBUG: npx version found: !npx_version!
+
+echo DEBUG: npm and npx configuration verified.
+echo npm configuration verified.
+
+:: Suggest npm update if there's a newer version available
+echo Checking for npm updates...
+echo DEBUG: Checking for npm outdated...
+for /f "delims=" %%o in ('npm outdated -g npm 2^>^&1') do set "npm_outdated=%%o"
+echo DEBUG: npm outdated -g npm output: !npm_outdated!
+echo DEBUG: npm outdated check errorlevel=!errorlevel!
+if !errorlevel! equ 0 (
+    echo.
+    echo INFO: A newer version of npm is available.
+    echo Consider updating npm for better performance: npm install -g npm@latest
+    echo.
+    set /p "update_npm=Would you like to update npm now? (y/n): "
+    set "update_npm=!update_npm: =!"
+    
+    if /i "!update_npm!"=="y" (
+        echo Updating npm...
+        npm install -g npm@latest
+        if !errorlevel! neq 0 (
+            echo WARNING: Failed to update npm. Continuing with current version...
+        ) else (
+            echo npm updated successfully.
+        )
+    )
+)
+
 :: Navigate to parent directory to create the new project
 echo.
 echo Navigating to parent directory...
 cd ..
-echo Current directory: %CD%
+echo DEBUG: Changed to parent directory, current directory: %CD%
 
 :: Create base workspace
 echo.
 echo Creating project structure...
+echo DEBUG: Project type is !project_type!
 if "!project_type!"=="1" (
     echo Setting up NX workspace...
     if /i "!create_server!"=="y" (
         echo Creating NX workspace with NestJS preset...
+        echo This may take a few minutes...
         CALL npx create-nx-workspace !project_name! --preset=nest --nxCloud=skip --packageManager=npm --appName=!nest_app_name! --e2eTestRunner=none --workspaceType=integrated --docker=false
+        set "nx_creation_result=!errorlevel!"
     ) else (
         echo Creating basic NX workspace...
+        echo This may take a few minutes...
         CALL npx create-nx-workspace !project_name! --preset=apps --nxCloud=skip --packageManager=npm --workspaceType=integrated
+        set "nx_creation_result=!errorlevel!"
+    )
+
+    :: Check if NX creation failed
+    if !nx_creation_result! neq 0 (
+        echo.
+        echo WARNING: NX workspace creation failed. Trying alternative approach...
+        
+        :: Try clearing npm cache and retry
+        echo Clearing npm cache...
+        npm cache clean --force >nul 2>&1
+        
+        :: Try creating the directory manually and then initialize
+        if not exist "!project_name!" mkdir "!project_name!"
+        cd "!project_name!"
+        
+        :: Try alternative approach with npm init
+        echo Trying alternative project setup...
+        npm init -y >nul 2>&1
+        
+        :: Create basic package.json for NX workspace
+        echo {> package.json
+        echo   "name": "!project_name!",>> package.json
+        echo   "version": "0.0.0",>> package.json
+        echo   "license": "MIT",>> package.json
+        echo   "scripts": {},>> package.json
+        echo   "private": true,>> package.json
+        echo   "devDependencies": {}>> package.json
+        echo }>> package.json
+        
+        :: Try installing NX directly
+        echo Installing NX...
+        npm install --save-dev @nrwl/workspace@latest nx@latest
+        if !errorlevel! neq 0 (
+            echo ERROR: Failed to install NX. Please check your npm installation.
+            echo.
+            echo Possible solutions:
+            echo 1. Update Node.js to the latest LTS version
+            echo 2. Clear npm cache: npm cache clean --force
+            echo 3. Check your internet connection
+            echo 4. Try running as administrator
+            echo.
+            pause
+            exit /b 1
+        )
+        
+        :: Initialize NX workspace
+        echo Initializing NX workspace...
+        npx nx init
+        
+        cd ..
     )
 
     :: Check if workspace directory was created successfully
@@ -346,10 +479,64 @@ if "!project_type!"=="1" (
     echo Setting up Full Stack NX workspace...
     if /i "!create_server!"=="y" (
         echo Creating NX workspace with NestJS preset...
+        echo This may take a few minutes...
         CALL npx create-nx-workspace !project_name! --preset=nest --nxCloud=skip --packageManager=npm --appName=!nest_app_name! --e2eTestRunner=none --workspaceType=integrated --docker=false
+        set "nx_creation_result=!errorlevel!"
     ) else (
         echo Creating basic NX workspace...
+        echo This may take a few minutes...
         CALL npx create-nx-workspace !project_name! --preset=apps --nxCloud=skip --packageManager=npm --workspaceType=integrated
+        set "nx_creation_result=!errorlevel!"
+    )
+
+    :: Check if NX creation failed
+    if !nx_creation_result! neq 0 (
+        echo.
+        echo WARNING: NX workspace creation failed. Trying alternative approach...
+        
+        :: Try clearing npm cache and retry
+        echo Clearing npm cache...
+        npm cache clean --force >nul 2>&1
+        
+        :: Try creating the directory manually and then initialize
+        if not exist "!project_name!" mkdir "!project_name!"
+        cd "!project_name!"
+        
+        :: Try alternative approach with npm init
+        echo Trying alternative project setup...
+        npm init -y >nul 2>&1
+        
+        :: Create basic package.json for NX workspace
+        echo {> package.json
+        echo   "name": "!project_name!",>> package.json
+        echo   "version": "0.0.0",>> package.json
+        echo   "license": "MIT",>> package.json
+        echo   "scripts": {},>> package.json
+        echo   "private": true,>> package.json
+        echo   "devDependencies": {}>> package.json
+        echo }>> package.json
+        
+        :: Try installing NX directly
+        echo Installing NX...
+        npm install --save-dev @nrwl/workspace@latest nx@latest
+        if !errorlevel! neq 0 (
+            echo ERROR: Failed to install NX. Please check your npm installation.
+            echo.
+            echo Possible solutions:
+            echo 1. Update Node.js to the latest LTS version
+            echo 2. Clear npm cache: npm cache clean --force
+            echo 3. Check your internet connection
+            echo 4. Try running as administrator
+            echo.
+            pause
+            exit /b 1
+        )
+        
+        :: Initialize NX workspace
+        echo Initializing NX workspace...
+        npx nx init
+        
+        cd ..
     )
 
     :: Check if workspace directory was created successfully
@@ -363,6 +550,7 @@ if "!project_type!"=="1" (
 ) else (
     echo Creating simple directory structure...
     mkdir "!project_name!"
+    echo DEBUG: mkdir project directory errorlevel=!errorlevel!
     if not exist "!project_name!" (
         echo ERROR: Failed to create project directory.
         pause
@@ -372,6 +560,7 @@ if "!project_type!"=="1" (
 )
 
 cd "!project_name!"
+echo DEBUG: Changed directory to project, current directory: %CD%
 echo Changed directory to: %CD%
 
 :: Reorganize NestJS app to backend directory (for NX workspace and Full Stack projects)
@@ -922,12 +1111,58 @@ echo GitHub Actions workflows setup completed.
 :: GIT AND GITHUB SETUP
 :: =============================================================================
 
+:: Check if GitHub CLI is installed
+echo.
+echo Checking if GitHub CLI is installed...
+gh --version >nul 2>&1
+if !errorlevel! neq 0 (
+    echo ERROR: GitHub CLI ^(gh^) is not installed.
+    echo.
+    echo Please install GitHub CLI to continue:
+    echo 1. Visit: https://cli.github.com/
+    echo 2. Download and install GitHub CLI for Windows
+    echo 3. Restart your command prompt
+    echo 4. Run this script again
+    echo.
+    echo Alternatively, you can install via winget:
+    echo   winget install GitHub.cli
+    echo.
+    pause
+    exit /b 1
+)
+echo GitHub CLI is installed.
+
+:: Check if Git is installed
+echo Checking if Git is installed...
+git --version >nul 2>&1
+if !errorlevel! neq 0 (
+    echo ERROR: Git is not installed.
+    echo.
+    echo Please install Git to continue:
+    echo 1. Visit: https://git-scm.com/downloads
+    echo 2. Download and install Git for Windows
+    echo 3. Restart your command prompt
+    echo 4. Run this script again
+    echo.
+    pause
+    exit /b 1
+)
+echo Git is installed.
+
 :: Git initialization
 echo.
 echo Initializing Git repository...
-git init --initial-branch=main
+git init
 if !errorlevel! neq 0 (
     echo ERROR: Failed to initialize Git repository.
+    pause
+    exit /b 1
+)
+
+:: Ensure we're on main branch (for compatibility with older Git versions)
+git checkout -b main 2>nul || git branch -M main
+if !errorlevel! neq 0 (
+    echo ERROR: Failed to set main branch.
     pause
     exit /b 1
 )
@@ -955,6 +1190,49 @@ if !errorlevel! neq 0 (
 )
 echo Git repository initialized successfully.
 
+:: Check GitHub CLI authentication
+echo.
+echo Checking GitHub CLI authentication...
+gh auth status >nul 2>&1
+if !errorlevel! neq 0 (
+    echo WARNING: GitHub CLI is not authenticated.
+    echo You need to authenticate with GitHub CLI to create the repository.
+    echo.
+    set /p "auth_choice=Do you want to authenticate now? (y/n): "
+    set "auth_choice=!auth_choice: =!"
+    
+    if /i "!auth_choice!"=="y" (
+        echo.
+        echo Opening GitHub CLI authentication...
+        echo Please follow the instructions in your browser to authenticate.
+        gh auth login
+        if !errorlevel! neq 0 (
+            echo ERROR: GitHub CLI authentication failed.
+            echo Please run 'gh auth login' manually and try the script again.
+            pause
+            exit /b 1
+        )
+        echo GitHub CLI authentication successful.
+    ) else (
+        echo.
+        echo GitHub repository creation will be skipped.
+        echo You can create the repository manually later or run the script again.
+        echo The local Git repository has been created successfully.
+        echo.
+        echo To create the GitHub repository manually:
+        echo 1. Run: gh auth login
+        if not "!organization!"=="" (
+            echo 2. Run: gh repo create !organization!/!project_name! --!repo_visibility! --source=. --remote=origin --push
+        ) else (
+            echo 2. Run: gh repo create !project_name! --!repo_visibility! --source=. --remote=origin --push
+        )
+        echo.
+        pause
+        exit /b 0
+    )
+)
+echo GitHub CLI authentication verified.
+
 :: Create and push GitHub repo with selected visibility
 echo.
 echo Creating GitHub repository...
@@ -964,11 +1242,33 @@ if not "!organization!"=="" (
     gh repo create !project_name! --!repo_visibility! --source=. --remote=origin --push
 )
 if !errorlevel! neq 0 (
-    echo ERROR: Failed to create GitHub repository. Please check your GitHub CLI authentication.
+    echo ERROR: Failed to create GitHub repository.
+    echo.
+    echo Possible solutions:
+    echo 1. Check your GitHub CLI authentication: gh auth status
+    echo 2. Re-authenticate if needed: gh auth login
+    echo 3. Verify you have permission to create repositories
+    if not "!organization!"=="" (
+        echo 4. Verify you have access to the organization: !organization!
+        echo 5. Check if repository !organization!/!project_name! already exists
+    ) else (
+        echo 4. Check if repository !project_name! already exists in your account
+    )
+    echo.
+    echo The local project has been created successfully.
+    echo You can create the GitHub repository manually later.
     pause
     exit /b 1
 )
 echo GitHub repository created and pushed successfully.
+
+:: Ensure main is set as default branch on GitHub
+echo.
+echo Setting main as default branch on GitHub...
+gh repo edit --default-branch main
+if !errorlevel! neq 0 (
+    echo WARNING: Failed to set main as default branch on GitHub. You can set this manually in GitHub settings.
+)
 
 :: Create and push dev branch
 echo.
@@ -985,13 +1285,6 @@ if !errorlevel! neq 0 (
     echo ERROR: Failed to push dev branch.
     pause
     exit /b 1
-)
-
-:: Set main as default branch on GitHub (optional)
-echo Setting main as default branch on GitHub...
-gh repo edit --default-branch main
-if !errorlevel! neq 0 (
-    echo WARNING: Failed to set main as default branch on GitHub. You can set this manually in GitHub settings.
 )
 
 echo Development branch created and pushed successfully.
@@ -1067,5 +1360,5 @@ if not "!organization!"=="" (
 echo Default branch: main
 echo ========================================
 echo.
-
+ 
 pause
