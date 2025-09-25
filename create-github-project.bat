@@ -200,8 +200,11 @@ if "!project_type!"=="1" (
 ) else if "!project_type!"=="4" (
     echo.
     echo ===== Full Stack Shared Libraries Setup =====
-    echo Do you want to create shared libraries that can be used across the project?
-    echo These will include: enums, types, utils with @!project_name!/[lib-name] imports
+    echo Do you want to create enterprise-level shared libraries?
+    echo Basic libraries: enums, types, utils
+    echo React libraries: react-components (reusable UI components)
+    echo Backend libraries: backend-modules (NestJS decorators, guards, interceptors)
+    echo These will use @!project_name!/[lib-name] imports for proper workspace organization
     set /p "create_shared_libs=Create shared libraries? (y/n): "
     set "create_shared_libs=!create_shared_libs: =!"
     
@@ -564,6 +567,7 @@ echo DEBUG: Changed directory to project, current directory: %CD%
 echo Changed directory to: %CD%
 
 :: Reorganize NestJS app to backend directory (for NX workspace and Full Stack projects)
+echo DEBUG: Server reorganization - project_type=!project_type!, create_server=!create_server!
 if "!project_type!"=="1" if /i "!create_server!"=="y" (
     echo Reorganizing NestJS app to apps/backend directory...
     if exist "apps\!nest_app_name!" (
@@ -576,6 +580,7 @@ if "!project_type!"=="1" if /i "!create_server!"=="y" (
         )
     )
 ) else if "!project_type!"=="4" if /i "!create_server!"=="y" (
+    echo DEBUG: Full Stack server reorganization - project_type=!project_type!, create_server=!create_server!
     echo Reorganizing NestJS app to apps/backend directory for Full Stack project...
     if exist "apps\!nest_app_name!" (
         if not exist "apps\backend" mkdir "apps\backend"
@@ -589,6 +594,7 @@ if "!project_type!"=="1" if /i "!create_server!"=="y" (
 )
 
 :: React app setup (for NX workspace and Full Stack projects)
+echo DEBUG: React app setup - project_type=!project_type!, create_client=!create_client!
 if "!project_type!"=="1" if /i "!create_client!"=="y" (
     echo.
     echo Setting up React application...
@@ -607,6 +613,7 @@ if "!project_type!"=="1" if /i "!create_client!"=="y" (
     )
     echo React application created successfully.
 ) else if "!project_type!"=="4" if /i "!create_client!"=="y" (
+    echo DEBUG: Full Stack React client creation - project_type=!project_type!, create_client=!create_client!
     echo.
     echo Setting up React application for Full Stack project...
     CALL npm install -D @nrwl/react
@@ -626,6 +633,7 @@ if "!project_type!"=="1" if /i "!create_client!"=="y" (
 )
 
 :: Create shared libraries if requested (for NX workspace and Full Stack projects)
+echo DEBUG: Shared libraries - project_type=!project_type!, create_shared_libs=!create_shared_libs!
 if "!project_type!"=="1" if /i "!create_shared_libs!"=="y" (
     echo.
     echo Creating enterprise-level shared libraries...
@@ -1152,6 +1160,14 @@ echo Git is installed.
 :: Git initialization
 echo.
 echo Initializing Git repository with main as default branch...
+
+:: Remove existing .git directory if it exists to ensure clean initialization
+if exist ".git" (
+    echo Removing existing Git configuration...
+    rmdir /s /q ".git" >nul 2>&1
+)
+
+:: Initialize with main branch
 git init --initial-branch=main
 if !errorlevel! neq 0 (
     echo WARNING: Failed to initialize Git with --initial-branch. Trying alternative approach...
@@ -1163,12 +1179,17 @@ if !errorlevel! neq 0 (
         exit /b 1
     )
     :: Ensure we're on main branch (for compatibility with older Git versions)
-    git checkout -b main 2>nul || git branch -M main
+    git checkout -b main 2>nul
     if !errorlevel! neq 0 (
-        echo ERROR: Failed to set main branch.
-        pause
-        exit /b 1
+        :: If checkout fails, try branch rename
+        git branch -M main 2>nul
+        if !errorlevel! neq 0 (
+            echo ERROR: Failed to set main branch.
+            pause
+            exit /b 1
+        )
     )
+    echo Git repository initialized and switched to main branch.
 ) else (
     echo Git repository initialized with main branch successfully.
 )
@@ -1242,11 +1263,54 @@ echo GitHub CLI authentication verified.
 :: Create and push GitHub repo with selected visibility and main as default branch
 echo.
 echo Creating GitHub repository with main as default branch...
+
+:: Check if repository already exists
+echo Checking if repository already exists...
+if not "!organization!"=="" (
+    gh repo view !organization!/!project_name! >nul 2>&1
+) else (
+    gh repo view !project_name! >nul 2>&1
+)
+
+if !errorlevel! equ 0 (
+    echo WARNING: Repository already exists on GitHub.
+    set /p "overwrite_repo=Do you want to delete and recreate it? (y/n): "
+    set "overwrite_repo=!overwrite_repo: =!"
+    
+    if /i "!overwrite_repo!"=="y" (
+        echo Deleting existing repository...
+        if not "!organization!"=="" (
+            gh repo delete !organization!/!project_name! --yes
+        ) else (
+            gh repo delete !project_name! --yes
+        )
+        if !errorlevel! neq 0 (
+            echo ERROR: Failed to delete existing repository.
+            pause
+            exit /b 1
+        )
+        echo Existing repository deleted successfully.
+    ) else (
+        echo Skipping repository creation. Using existing repository.
+        :: Add existing repo as remote
+        if not "!organization!"=="" (
+            git remote add origin https://github.com/!organization!/!project_name!.git 2>nul
+        ) else (
+            git remote add origin https://github.com/!username!/!project_name!.git 2>nul
+        )
+        git push -u origin main
+        goto :skip_repo_creation
+    )
+)
+
+:: Create new repository
 if not "!organization!"=="" (
     gh repo create !organization!/!project_name! --!repo_visibility! --source=. --remote=origin --push
 ) else (
     gh repo create !project_name! --!repo_visibility! --source=. --remote=origin --push
 )
+
+:skip_repo_creation
 if !errorlevel! neq 0 (
     echo ERROR: Failed to create GitHub repository.
     echo.
