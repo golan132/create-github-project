@@ -1,0 +1,132 @@
+import {
+  BadRequestException,
+  ConsoleLogger,
+  Logger,
+  ValidationPipe,
+} from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
+// @if:swagger
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+// @endif:swagger
+import { ValidationError } from 'class-validator';
+// @if:swagger
+import basicAuth from 'express-basic-auth';
+// @endif:swagger
+// @if:helmet
+import helmet from 'helmet';
+// @endif:helmet
+import { join, map, pipe, values } from 'lodash/fp';
+import { AppModule } from './app.module';
+import { EnvService } from './env/env.service';
+
+class CleanLogger extends ConsoleLogger {
+  constructor() {
+    const isDev = process.env['NODE_ENV'] !== 'production';
+    super({
+      logLevels: isDev
+        ? ['log', 'error', 'warn', 'debug', 'verbose']
+        : ['log', 'error', 'warn'],
+    });
+  }
+  protected formatPid(): string {
+    return '';
+  }
+  protected formatTimestamp(): string {
+    return '';
+  }
+}
+
+// Process-level error handlers — installed BEFORE NestFactory so we
+// catch failures during module initialization too.
+process.on('unhandledRejection', (reason: unknown) => {
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  Logger.error(`Unhandled promise rejection: ${err.message}`, err.stack, 'Process');
+});
+process.on('uncaughtException', (err: Error) => {
+  Logger.error(`Uncaught exception: ${err.message}`, err.stack, 'Process');
+  setTimeout(() => process.exit(1), 250).unref();
+});
+
+async function bootstrap() {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    logger: new CleanLogger(),
+  });
+
+  // Required for OnModuleDestroy / OnApplicationShutdown hooks to fire on
+  // SIGTERM/SIGINT.
+  app.enableShutdownHooks();
+
+  const envService = app.get(EnvService);
+  const port = envService.get('PORT');
+  const globalPrefix = envService.get('GLOBAL_PREFIX');
+
+  app.setGlobalPrefix(globalPrefix);
+
+  // @if:helmet
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'],
+          imgSrc: ["'self'", 'data:', 'https://cdn.jsdelivr.net'],
+        },
+      },
+    }),
+  );
+  app.disable('x-powered-by');
+  // @endif:helmet
+
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+      exceptionFactory: (errors) =>
+        new BadRequestException(
+          pipe(
+            map(
+              (error: ValidationError) =>
+                `Mismatch for given property ${JSON.stringify(error.property)} with value ${JSON.stringify(
+                  error.value,
+                )}: ${pipe(values, join(', '))(JSON.stringify(error.constraints))}`,
+            ),
+            join('; '),
+          )(errors),
+        ),
+    }),
+  );
+
+  // @if:swagger
+  app.use(
+    `/${globalPrefix}/docs`,
+    basicAuth({
+      challenge: true,
+      users: {
+        [envService.get('DOCS_USERNAME')]: envService.get('DOCS_PASSWORD'),
+      },
+    }),
+  );
+
+  const config = new DocumentBuilder()
+    .setTitle('__DISPLAY_NAME__ API')
+    .setDescription('The __DISPLAY_NAME__ API documentation')
+    .setVersion('1.0')
+    .addCookieAuth()
+    .addBearerAuth()
+    .build();
+
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup(`${globalPrefix}/docs`, app, document);
+  // @endif:swagger
+
+  await app.listen(port);
+  Logger.log(`🚀 Application is running on: http://localhost:${port}/${globalPrefix}`);
+}
+
+bootstrap().catch((err: unknown) => {
+  const error = err instanceof Error ? err : new Error(String(err));
+  Logger.error(`Failed to bootstrap application: ${error.message}`, error.stack, 'Bootstrap');
+  process.exit(1);
+});

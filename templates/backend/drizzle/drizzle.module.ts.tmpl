@@ -1,0 +1,29 @@
+import { Global, Module } from '@nestjs/common';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Client } from 'pg';
+import { EnvService } from '../env/env.service';
+
+export const DRIZZLE_CLIENT = Symbol('DRIZZLE_CLIENT');
+export type DrizzleClient = ReturnType<typeof drizzle>;
+
+@Global()
+@Module({
+  providers: [
+    {
+      provide: DRIZZLE_CLIENT,
+      useFactory: async (envService: EnvService): Promise<DrizzleClient> => {
+        const pgClient = new Client({
+          connectionString: envService.get('DATABASE_URL'),
+        });
+        await pgClient.connect();
+        return drizzle(pgClient, {
+          logger: process.env['NODE_ENV'] !== 'production',
+          casing: 'snake_case',
+        });
+      },
+      inject: [EnvService],
+    },
+  ],
+  exports: [DRIZZLE_CLIENT],
+})
+export class DrizzleModule {}

@@ -1,0 +1,60 @@
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import TelegramBot from 'node-telegram-bot-api';
+import { EnvService } from '../../env/env.service';
+
+/**
+ * Long-polling Telegram bot that responds only to a single admin chat ID
+ * defined via TELEGRAM_ADMIN_CHAT_ID. Disabled when the token or the admin
+ * id are not configured (no commands are processed in that case).
+ */
+@Injectable()
+export class BotService implements OnModuleInit {
+  private readonly logger = new Logger(BotService.name);
+  private bot: TelegramBot | null = null;
+  private adminChatId: string | null = null;
+
+  constructor(private readonly envService: EnvService) {}
+
+  onModuleInit(): void {
+    const token = this.envService.get('TELEGRAM_BOT_TOKEN');
+    const adminId = this.envService.get('TELEGRAM_ADMIN_CHAT_ID');
+
+    if (!token) {
+      this.logger.warn('TELEGRAM_BOT_TOKEN not set — control bot disabled.');
+      return;
+    }
+    if (!adminId) {
+      this.logger.error('TELEGRAM_ADMIN_CHAT_ID not set — bot disabled for safety.');
+      return;
+    }
+
+    this.adminChatId = adminId;
+    this.bot = new TelegramBot(token, { polling: true });
+    this.bot.on('message', (msg) => this.handleMessage(msg));
+    this.logger.log('Telegram control bot started (polling).');
+  }
+
+  private isAdmin(chatId: number): boolean {
+    return String(chatId) === this.adminChatId;
+  }
+
+  private async handleMessage(msg: TelegramBot.Message): Promise<void> {
+    if (!this.bot || !this.isAdmin(msg.chat.id)) return;
+    const text = (msg.text ?? '').trim();
+
+    if (text === '/start' || text === '/help') {
+      await this.bot.sendMessage(
+        msg.chat.id,
+        'Bot is online. Available commands: /status, /help',
+      );
+      return;
+    }
+
+    if (text === '/status') {
+      await this.bot.sendMessage(msg.chat.id, '✅ Service is up.');
+      return;
+    }
+
+    await this.bot.sendMessage(msg.chat.id, `Unknown command: ${text}`);
+  }
+}

@@ -1,0 +1,90 @@
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
+import { Api, TelegramClient } from 'teleproto';
+import { StringSession } from 'teleproto/sessions';
+import * as readline from 'node:readline';
+import { EnvService } from '../env/env.service';
+
+function prompt(question: string): Promise<string> {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer.trim());
+    });
+  });
+}
+
+/**
+ * Thin wrapper around the GramJS / teleproto MTProto user client.
+ * Disabled (logs a warning and returns) when TELEGRAM_API_ID / TELEGRAM_API_HASH
+ * are not configured.
+ */
+@Injectable()
+export class TelegramService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(TelegramService.name);
+  private client?: TelegramClient;
+
+  constructor(private readonly envService: EnvService) {}
+
+  get connected(): boolean {
+    return !!this.client?.connected;
+  }
+
+  async onModuleInit(): Promise<void> {
+    const apiId = this.envService.get('TELEGRAM_API_ID');
+    const apiHash = this.envService.get('TELEGRAM_API_HASH');
+
+    if (!apiId || !apiHash) {
+      this.logger.warn('TELEGRAM_API_ID / TELEGRAM_API_HASH not set — Telegram client disabled.');
+      return;
+    }
+
+    const sessionStr = this.envService.get('TELEGRAM_SESSION') ?? '';
+    const session = new StringSession(sessionStr);
+
+    this.client = new TelegramClient(session, apiId, apiHash, { connectionRetries: 5 });
+
+    await this.client.start({
+      phoneNumber: () => prompt('Phone number (e.g. +1234567890): '),
+      password: () => prompt('2FA password (leave blank if none): '),
+      phoneCode: () => prompt('Telegram verification code: '),
+      onError: (err) => this.logger.error('Auth error', err),
+    });
+
+    if (!sessionStr) {
+      const saved = this.client.session.save() as unknown as string;
+      this.logger.log('──────────────────────────────────────────────────────');
+      this.logger.log('Session created. Copy into TELEGRAM_SESSION in .env:');
+      this.logger.log(saved);
+      this.logger.log('──────────────────────────────────────────────────────');
+    }
+
+    this.logger.log('Telegram client connected');
+  }
+
+  async onModuleDestroy(): Promise<void> {
+    if (this.client?.connected) {
+      await this.client.disconnect();
+      this.logger.log('Telegram client disconnected');
+    }
+  }
+
+  /** Resolve a chat by username or numeric ID. */
+  async getEntity(idOrUsername: string): Promise<unknown> {
+    if (!this.client) throw new Error('Telegram client not initialized');
+    return this.client.getEntity(idOrUsername);
+  }
+
+  /** Raw access for advanced API calls. */
+  get raw(): TelegramClient | undefined {
+    return this.client;
+  }
+
+  /** Convenience re-export for callers. */
+  static readonly Api = Api;
+}

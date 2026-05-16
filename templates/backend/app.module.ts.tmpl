@@ -1,0 +1,56 @@
+import { Module } from '@nestjs/common';
+// @if:eventEmitter
+import { EventEmitterModule } from '@nestjs/event-emitter';
+// @endif:eventEmitter
+// @if:schedule
+import { ScheduleModule } from '@nestjs/schedule';
+// @endif:schedule
+// @if:pino
+import { RequestMethod } from '@nestjs/common';
+import { LoggerModule as PinoLoggerModule } from 'nestjs-pino';
+// @endif:pino
+import { EnvModule } from './env/env.module';
+// @if:pino
+import { EnvService } from './env/env.service';
+// @endif:pino
+// @if:telegram
+import { TelegramModule } from './telegram/telegram.module';
+// @endif:telegram
+
+@Module({
+  imports: [
+    EnvModule,
+    // @if:pino
+    PinoLoggerModule.forRootAsync({
+      useFactory: (envService: EnvService) => ({
+        pinoHttp: {
+          ...(envService.get('NODE_ENV') === 'development' && {
+            transport: {
+              target: 'pino-pretty',
+              options: {
+                colorize: true,
+                singleLine: false,
+                messageFormat: '{req.method} {req.url} from {req.origin}',
+                ignore: 'pid',
+              },
+            },
+          }),
+          autoLogging: false,
+        },
+        forRoutes: [{ path: '*path', method: RequestMethod.ALL }],
+      }),
+      inject: [EnvService],
+    }),
+    // @endif:pino
+    // @if:schedule
+    ScheduleModule.forRoot(),
+    // @endif:schedule
+    // @if:eventEmitter
+    EventEmitterModule.forRoot(),
+    // @endif:eventEmitter
+    // @if:telegram
+    TelegramModule,
+    // @endif:telegram
+  ],
+})
+export class AppModule {}

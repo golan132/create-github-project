@@ -1,0 +1,11 @@
+import { Module } from '@nestjs/common';
+import { TelegramController } from './telegram.controller';
+import { TelegramService } from './telegram.service';
+import { BotService } from './bot/bot.service';
+
+@Module({
+  controllers: [TelegramController],
+  providers: [TelegramService, BotService],
+  exports: [TelegramService, BotService],
+})
+export class TelegramModule {}

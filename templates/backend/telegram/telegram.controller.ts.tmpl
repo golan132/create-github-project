@@ -1,0 +1,15 @@
+import { Controller, Get } from '@nestjs/common';
+__SWAGGER_IMPORT__
+import { TelegramService } from './telegram.service';
+
+__SWAGGER_TAGS__
+@Controller('telegram')
+export class TelegramController {
+  constructor(private readonly telegramService: TelegramService) {}
+
+  @Get('status')
+  __SWAGGER_OPERATION__
+  getStatus() {
+    return { connected: this.telegramService.connected };
+  }
+}
